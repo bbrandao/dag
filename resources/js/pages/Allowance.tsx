@@ -1,5 +1,5 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import type { FormEvent } from 'react';
+import { useEffect, type FormEvent } from 'react';
 
 const reais = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const money = (cents: number) => reais.format(cents / 100);
@@ -34,6 +34,12 @@ export default function Allowance(props: AllowanceProps) {
     const rate = useForm({ cents_per_point: rates[0]?.cents_per_point ?? 10 });
     const closing = useForm({ request_id: '', fingerprint: '' });
     const payment = useForm({});
+    const largestMonth = Math.max(1, ...months.map(month => month.points));
+
+    useEffect(() => {
+        const section = window.location.hash.slice(1);
+        document.getElementById(section)?.scrollIntoView();
+    }, []);
 
     function setRate(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -61,8 +67,8 @@ export default function Allowance(props: AllowanceProps) {
             </section>
             {isGuardian && (
                 <>
-                    <section className="card">
-                        <h2>Conversão da família</h2>
+                    <section className="card" id="conversao">
+                        <h2>Configurar valor do ponto</h2>
                         <p>A primeira taxa também dá valor aos pontos já aprovados. As alterações seguintes valem para novas missões.</p>
                         <form onSubmit={setRate}>
                             <label htmlFor="conversion">Centavos por ponto</label>
@@ -78,15 +84,19 @@ export default function Allowance(props: AllowanceProps) {
                             <ul>{rates.map(item => <li key={item.id}>{money(item.cents_per_point)} por ponto · {item.effective_at}</li>)}</ul>
                         </details>}
                     </section>
-                    <section className="card">
-                        <h2>Gerar mesada</h2>
+                    <section className="card" id="fechamento">
+                        <h2>Encerrar ciclo de mesada</h2>
                         <p>Na virada do mês, o DAG fecha automaticamente o saldo do mês anterior. Você também pode fechar o saldo do mês atual.</p>
                         {preview ? (
                             <>
                                 <p>{preview.points} pontos serão movidos para uma conta de {money(preview.amount_cents)} a receber.</p>
-                                <button type="button" disabled={closing.processing} onClick={close}>Gerar conta</button>
+                                <button type="button" disabled={closing.processing} onClick={close}>Encerrar ciclo e gerar conta</button>
                             </>
-                        ) : <p>Nenhum saldo em reais do mês atual está disponível para fechar.</p>}
+                        ) : (
+                            <p>{rates.length === 0
+                                ? 'Configure o valor do ponto para fechar a mesada.'
+                                : 'O ciclo fica disponível quando houver pontos aprovados do mês atual fora de uma mesada.'}</p>
+                        )}
                         <p className="error" role="alert">{closing.errors.fingerprint}</p>
                     </section>
                 </>
@@ -113,8 +123,17 @@ export default function Allowance(props: AllowanceProps) {
                     </article>
                 ))}
             </section>
-            <section className="card">
-                <h2>Últimos seis meses</h2>
+            <section className="card" id="evolucao">
+                <h2>Evolução nos últimos seis meses</h2>
+                <div className="point-trend" aria-hidden="true">
+                    {[...months].reverse().map(month => (
+                        <div key={month.month}>
+                            <span>{monthLabel(month.month)}</span>
+                            <div><i style={{ width: `${100 * month.points / largestMonth}%` }} /></div>
+                            <span>{month.points} pts</span>
+                        </div>
+                    ))}
+                </div>
                 <div className="table-scroll">
                     <table>
                         <thead><tr><th scope="col">Mês</th><th scope="col">Pontos</th><th scope="col">Ganhos</th><th scope="col">Pagos</th></tr></thead>

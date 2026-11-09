@@ -59,9 +59,16 @@ final class AllowanceTest extends TestCase
         $this->travel(1)->hours();
         $this->patch("{$url}/contas/{$payout->id}/paga")->assertRedirect($url);
         $this->assertSame($paidAt, DB::table('payouts')->value('paid_at'));
+        $this->get('/app')->assertInertia(fn (Assert $page) => $page->component('Dashboard')
+            ->where('rateCents', 20)->has('progress', 1)->where('progress.0.id', $child->id)
+            ->where('progress.0.availablePoints', 10)->where('progress.0.approved', 1)
+            ->where('progress.0.monthCents', 200)->where('progress.0.paidThisMonth', 200));
         $this->as($child)->get('/app/ganhos')->assertInertia(fn (Assert $page) => $page->component('Allowance')
             ->where('availablePoints', 10)->where('availableCents', 200)->where('paidCents', 200)
             ->where('pendingCents', 0)->has('rates', 0)->where('months.0.paid_cents', 200));
+        $this->get('/app')->assertInertia(fn (Assert $page) => $page->component('Dashboard')
+            ->where('rateCents', null)->has('progress', 1)->where('progress.0.id', $child->id)
+            ->where('progress.0.availablePoints', 10)->where('progress.0.pendingCents', 0));
         $this->get($url)->assertForbidden();
     }
 

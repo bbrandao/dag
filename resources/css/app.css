@@ -52,3 +52,11 @@ button:disabled { opacity: .65; cursor: wait; }
 .pwa-bar { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; max-width: 40rem; margin: auto; padding: .65rem 1rem 0; }
 .pwa-bar a { color: #452497; font-weight: 700; }
 .pwa-bar p { flex-basis: 100%; margin: 0; }
+.dashboard-metrics { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); }
+.dashboard-metrics div { padding: .55rem; border-radius: .65rem; background: #fff9ee; }
+.dashboard-metrics dt { font-size: .85rem; }
+.dashboard-metrics dd { margin: .2rem 0 0; font-size: 1.1rem; font-weight: 750; }
+.point-trend { display: grid; gap: .5rem; margin: 0 0 1rem; font-size: .85rem; }
+.point-trend > div { display: grid; align-items: center; grid-template-columns: auto 1fr auto; gap: .5rem; }
+.point-trend > div > div { background: #f1e9ff; border-radius: 1rem; overflow: hidden; }
+.point-trend i { display: block; height: .65rem; background: #5b35c9; }

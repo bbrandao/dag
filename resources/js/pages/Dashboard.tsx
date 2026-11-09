@@ -1,6 +1,24 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import ChildProfileForm from './ChildProfileForm';
 
+const reais = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const money = (cents: number) => reais.format(cents / 100);
+
+interface Progress {
+    id: string;
+    name: string;
+    open: number;
+    inReview: number;
+    expired: number;
+    approved: number;
+    availablePoints: number;
+    awaitingConversion: boolean;
+    monthCents: number;
+    monthAwaitingConversion: boolean;
+    pendingCents: number;
+    paidThisMonth: number;
+}
+
 interface DashboardProps {
     name: string;
     role: 'guardian' | 'child';
@@ -8,11 +26,15 @@ interface DashboardProps {
     children: { id: string; name: string }[];
     whatsappNotices: boolean;
     earnedPoints: number;
+    monthLabel: string;
+    rateCents: number | null;
+    progress: Progress[];
 }
 
-export default function Dashboard({ name, role, family, children, whatsappNotices, earnedPoints }: DashboardProps) {
+export default function Dashboard({ name, role, family, children, whatsappNotices, earnedPoints, monthLabel, rateCents, progress }: DashboardProps) {
     const notices = useForm({ enabled: whatsappNotices });
     const isGuardian = role === 'guardian';
+    const firstChild = children[0];
 
     return (
         <main className="screen">
@@ -33,6 +55,42 @@ export default function Dashboard({ name, role, family, children, whatsappNotice
                     {isGuardian && <Link className="button secondary" href="/guardian/revisoes">Revisar missões</Link>}
                     {!isGuardian && <Link className="button secondary" href="/app/ganhos">Ver meus ganhos</Link>}
                 </div>
+            </section>
+            {isGuardian && firstChild && (
+                <section className="card">
+                    <h2>Valor de cada ponto</h2>
+                    <p>{rateCents === null ? 'Configure a taxa de conversão para transformar os pontos da família em reais.' : `Taxa da família: 1 ponto = ${money(rateCents)}.`}</p>
+                    <a className="button" href={`/guardian/mesadas/${firstChild.id}#conversao`}>Configurar valor do ponto</a>
+                </section>
+            )}
+            <section aria-labelledby="progress-title">
+                <h2 id="progress-title">{isGuardian ? 'Acompanhamento dos filhos' : 'Meu acompanhamento'}</h2>
+                <p>Resumo de {monthLabel}</p>
+                {progress.length === 0 && <p className="card">Cadastre um perfil infantil para acompanhar as missões e configurar a mesada.</p>}
+                {progress.map(item => {
+                    const allowance = isGuardian ? `/guardian/mesadas/${item.id}` : '/app/ganhos';
+
+                    return (
+                        <article className="card" key={item.id}>
+                            {isGuardian && <h3>{item.name}</h3>}
+                            <dl className="dashboard-metrics">
+                                <div><dt>Missões a fazer agora</dt><dd>{item.open}</dd></div>
+                                <div><dt>Em revisão agora</dt><dd>{item.inReview}</dd></div>
+                                <div><dt>Aprovadas no mês</dt><dd>{item.approved}</dd></div>
+                                <div><dt>Vencidas no mês</dt><dd>{item.expired}</dd></div>
+                                <div><dt>Pontos disponíveis</dt><dd>{item.availablePoints}</dd></div>
+                                <div><dt>Ganhos no mês</dt><dd>{item.monthAwaitingConversion ? 'Aguardando taxa' : money(item.monthCents)}</dd></div>
+                                <div><dt>Mesadas a receber</dt><dd>{money(item.pendingCents)}</dd></div>
+                                <div><dt>Pago no mês</dt><dd>{money(item.paidThisMonth)}</dd></div>
+                            </dl>
+                            {item.awaitingConversion && <p>Há pontos disponíveis aguardando a primeira taxa de conversão.</p>}
+                            <div className="filters">
+                                {isGuardian && <a className="button" href={`${allowance}#fechamento`}>Encerrar ciclo de mesada</a>}
+                                <a className="button secondary" href={`${allowance}#evolucao`}>Ver evolução e extrato</a>
+                            </div>
+                        </article>
+                    );
+                })}
             </section>
             <section className="card">
                 <h2>Avisos</h2>
