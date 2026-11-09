@@ -1,5 +1,5 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import type { FormEvent } from 'react';
+import ChildProfileForm from './ChildProfileForm';
 
 interface DashboardProps {
     name: string;
@@ -11,14 +11,8 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ name, role, family, children, whatsappNotices, earnedPoints }: DashboardProps) {
-    const form = useForm({ name: '', birth_date: '', phone: '+55', authorized: false });
     const notices = useForm({ enabled: whatsappNotices });
     const isGuardian = role === 'guardian';
-
-    function registerChild(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        form.post('/guardian/children', { onSuccess: () => form.reset() });
-    }
 
     return (
         <main className="screen">
@@ -55,33 +49,13 @@ export default function Dashboard({ name, role, family, children, whatsappNotice
                 <section className="card" aria-labelledby="children-title">
                     <h2 id="children-title">Filhos vinculados</h2>
                     {children.length ? (
-                        <ul>{children.map(child => <li key={child.id}>{child.name}</li>)}</ul>
+                        <ul>{children.map(child => (
+                            <li key={child.id}>
+                                {child.name} <Link href={`/guardian/children/${child.id}/editar`} aria-label={`Editar perfil de ${child.name}`}>Editar</Link>
+                            </li>
+                        ))}</ul>
                     ) : <p>Cadastre o primeiro perfil da família.</p>}
-                    <form onSubmit={registerChild}>
-                        <label htmlFor="name">Nome</label>
-                        <input id="name" required maxLength={120} value={form.data.name}
-                            aria-describedby="name-error" aria-invalid={Boolean(form.errors.name)}
-                            onChange={event => form.setData('name', event.target.value)} />
-                        <p id="name-error" className="error" role="alert">{form.errors.name}</p>
-                        <label htmlFor="birth-date">Data de nascimento</label>
-                        <input id="birth-date" type="date" required value={form.data.birth_date}
-                            aria-describedby="date-error" aria-invalid={Boolean(form.errors.birth_date)}
-                            onChange={event => form.setData('birth_date', event.target.value)} />
-                        <p id="date-error" className="error" role="alert">{form.errors.birth_date}</p>
-                        <label htmlFor="child-phone">WhatsApp próprio com código do país</label>
-                        <input id="child-phone" type="tel" required maxLength={16} value={form.data.phone}
-                            aria-describedby="phone-error" aria-invalid={Boolean(form.errors.phone)}
-                            onChange={event => form.setData('phone', event.target.value)} />
-                        <p id="phone-error" className="error" role="alert">{form.errors.phone}</p>
-                        <label className="check">
-                            <input type="checkbox" required checked={form.data.authorized}
-                                onChange={event => form.setData('authorized', event.target.checked)} />
-                            Confirmo que tenho autorização para cadastrar este perfil.
-                        </label>
-                        <p className="error" role="alert">{form.errors.authorized}</p>
-                        <button type="submit" disabled={form.processing}>Cadastrar perfil</button>
-                        {form.recentlySuccessful && <p role="status">Perfil cadastrado.</p>}
-                    </form>
+                    <ChildProfileForm />
                 </section>
             )}
         </main>

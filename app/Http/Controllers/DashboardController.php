@@ -42,7 +42,9 @@ final class DashboardController
     public function updateNotices(Request $request): RedirectResponse
     {
         $request->validate(['enabled' => ['required', 'boolean']]);
-        $request->user()->forceFill(['whatsapp_notices' => $request->boolean('enabled')])->save();
+        $user = $request->user();
+        User::whereKey($user->id)->where('active', true)->where('session_version', $user->session_version)
+            ->update(['whatsapp_notices' => $request->boolean('enabled')]);
 
         return redirect()->route('dashboard');
     }

@@ -35,7 +35,8 @@ final class OtpService
 
             // O bloqueio do usuário também cobre pedidos simultâneos de sessões diferentes.
             if (! app()->isLocal()
-                && (clone $challenges)->where('expires_at', '>', $now->copy()->addMinutes(4))->exists()) {
+                && (clone $challenges)->whereNull('consumed_at')
+                    ->where('expires_at', '>', $now->copy()->addMinutes(4))->exists()) {
                 return false;
             }
 

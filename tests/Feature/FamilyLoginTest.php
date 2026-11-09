@@ -9,6 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -78,6 +79,50 @@ final class FamilyLoginTest extends TestCase
         Http::assertNothingSent();
         $this->post('/auth/otp/verify', ['code' => '123456'])->assertSessionHasErrors('code');
         $this->assertGuest();
+    }
+
+    public function test_linked_guardian_can_edit_the_child_profile_and_invalidates_access_on_number_change(): void
+    {
+        $guardian = $this->guardian();
+        $this->actingAs($guardian)->withSession(['account_version' => $guardian->session_version])
+            ->post('/guardian/children', $this->childData())->assertRedirect('/app');
+        $child = User::where('phone_hash', Phone::fingerprint(self::CHILD_PHONE))->firstOrFail();
+        $url = "/guardian/children/{$child->id}";
+        $this->get("{$url}/editar")->assertInertia(fn (Assert $page) => $page->component('EditChild')
+            ->where('child.birth_date', '2013-01-01')->where('child.phone', self::CHILD_PHONE));
+        $updated = ['name' => 'Perfil atualizado', 'birth_date' => '2013-02-02', 'phone' => self::CHILD_PHONE];
+        $this->patch($url, $updated)->assertRedirect('/app');
+        $this->assertSame(1, $child->refresh()->session_version);
+        $this->assertSame('2013-02-02', Crypt::decryptString(DB::table('children')->where('user_id', $child->id)->value('birth_date')));
+        $this->patch($url, [...$updated, 'phone' => self::GUARDIAN_PHONE])->assertSessionHasErrors('phone');
+
+        $this->post('/logout');
+        $this->post('/auth/otp', ['phone' => self::CHILD_PHONE])->assertRedirect('/login');
+        $challenge = session('otp_challenge');
+        $oldCode = $this->sentCode(self::CHILD_PHONE);
+        $child->forceFill(['whatsapp_notices' => true, 'remember_token' => 'test-token'])->save();
+        $this->actingAs($guardian)->withSession(['account_version' => $guardian->session_version]);
+        $newPhone = '+5571999994444';
+        $this->patch($url, [...$updated, 'phone' => $newPhone])->assertRedirect('/app')->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('audit_events', ['subject_id' => $child->id, 'event' => 'child.phone_changed']);
+        $this->assertNotNull(DB::table('otp_challenges')->where('id', $challenge)->value('consumed_at'));
+        $child->refresh();
+        $this->assertSame(2, $child->session_version);
+        $this->assertNull($child->remember_token);
+        $this->assertFalse((bool) $child->whatsapp_notices);
+        $this->assertSame($newPhone, $child->phone);
+
+        $this->actingAs($child)->withSession(['account_version' => 1])->get('/app')->assertRedirect('/login');
+        $this->withSession(['otp_challenge' => $challenge])->post('/auth/otp/verify', ['code' => $oldCode])->assertSessionHasErrors('code');
+        $this->post('/auth/otp', ['phone' => $newPhone])->assertRedirect('/login');
+        $this->post('/auth/otp/verify', ['code' => $this->sentCode($newPhone)])->assertRedirect('/app');
+        $this->assertAuthenticatedAs($child);
+        $this->get("{$url}/editar")->assertForbidden();
+
+        DB::table('guardian_child_links')->where('child_id', $child->id)->update(['active' => false]);
+        $this->actingAs($guardian)->withSession(['account_version' => $guardian->session_version]);
+        $this->get("{$url}/editar")->assertNotFound();
+        $this->patch($url, $updated)->assertNotFound();
     }
 
     public function test_otp_returns_to_an_authenticated_mission_link(): void

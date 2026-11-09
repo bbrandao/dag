@@ -40,6 +40,8 @@ docker compose exec app php artisan dag:provision-family
 
 Abra [localhost:8000](http://localhost:8000), entre com o WhatsApp do responsável provisionado, cadastre um perfil infantil com o número próprio e saia. Entre com o número da criança para conferir a separação dos perfis. O serviço `scheduler` limpa os desafios expirados.
 
+Em **Filhos vinculados → Editar**, o responsável pode atualizar nome, nascimento e WhatsApp. Se trocar o número, a criança entra novamente pelo novo WhatsApp e pode reativar os avisos no painel.
+
 Na área do responsável, abra **Gerenciar tarefas** e cadastre uma tarefa atribuída à criança. Escolha a recorrência, os dias, os pontos e os horários de semana e fim de semana. No perfil da criança, **Ver minhas missões** mostra as ocorrências abertas ordenadas pelo prazo, com filtros de periodicidade. O mesmo agendador prepara as ocorrências em segundo plano. A lista também prepara as missões elegíveis ao abrir.
 
 Em **Tarefas cadastradas**, use **Editar** para atualizar a configuração ou **Excluir** para parar de gerar novas missões. A exclusão é lógica. As missões já abertas preservam as condições originais.
