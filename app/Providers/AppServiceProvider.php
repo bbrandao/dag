@@ -24,7 +24,11 @@ class AppServiceProvider extends ServiceProvider
             return response('Muitas tentativas.', 429, $headers);
         };
 
-        RateLimiter::for('otp-issue', function (Request $request) use ($limited): array {
+        RateLimiter::for('otp-issue', function (Request $request) use ($limited) {
+            if ($this->app->isLocal()) {
+                return Limit::none();
+            }
+
             $limits = [Limit::perMinute(10)->by('ip:'.$request->ip())->response($limited)];
             $phone = $request->input('phone');
 

@@ -34,7 +34,8 @@ final class OtpService
             $challenges = DB::table('otp_challenges')->where('user_id', $user->id);
 
             // O bloqueio do usuário também cobre pedidos simultâneos de sessões diferentes.
-            if ((clone $challenges)->where('expires_at', '>', $now->copy()->addMinutes(4))->exists()) {
+            if (! app()->isLocal()
+                && (clone $challenges)->where('expires_at', '>', $now->copy()->addMinutes(4))->exists()) {
                 return false;
             }
 

@@ -6,6 +6,7 @@ use App\Models\Family;
 use App\Models\User;
 use App\Support\Phone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -190,6 +191,23 @@ final class FamilyLoginTest extends TestCase
         $code = $this->sentCode(self::GUARDIAN_PHONE);
         $this->travel(5)->minutes();
         $this->post('/auth/otp/verify', ['code' => $code])->assertSessionHasErrors('code');
+    }
+
+    public function test_local_development_can_request_a_replacement_code_immediately(): void
+    {
+        $this->app->instance('env', 'local');
+        $this->withoutMiddleware(PreventRequestForgery::class);
+        $this->guardian();
+        $payload = ['phone' => self::GUARDIAN_PHONE];
+
+        $this->post('/auth/otp', $payload)->assertRedirect('/login');
+        $previous = session('otp_challenge');
+        $this->post('/auth/otp', $payload)->assertRedirect('/login');
+
+        $this->assertNotSame($previous, session('otp_challenge'));
+        $this->assertNotNull(DB::table('otp_challenges')->where('id', $previous)->value('consumed_at'));
+        $this->assertCount(2, Http::recorded(fn (Request $request) => $request->method() === 'POST'));
+        $this->post('/auth/otp/verify', ['code' => $this->sentCode(self::GUARDIAN_PHONE)])->assertRedirect('/app');
     }
 
     private function guardian(): User
