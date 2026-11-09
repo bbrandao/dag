@@ -21,5 +21,7 @@ Route::middleware(['auth', 'active.account'])->group(function (): void {
     Route::post('/guardian/children', [ChildController::class, 'store']);
     Route::get('/guardian/tasks', [TaskController::class, 'index'])->name('guardian.tasks');
     Route::post('/guardian/tasks', [TaskController::class, 'store']);
+    Route::patch('/guardian/tasks/{task}', [TaskController::class, 'update'])->whereUuid('task');
+    Route::delete('/guardian/tasks/{task}', [TaskController::class, 'destroy'])->whereUuid('task');
     Route::get('/app/missoes', [TaskController::class, 'missions'])->name('missions');
 });

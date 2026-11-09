@@ -5,10 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class TaskTemplate extends Model
 {
     use HasUuids;
+    use SoftDeletes;
 
     public const FREQUENCIES = ['daily', 'weekly', 'monthly', 'yearly'];
 
@@ -24,6 +26,7 @@ class TaskTemplate extends Model
 
     public function children(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'task_assignments', 'task_id', 'child_id');
+        return $this->belongsToMany(User::class, 'task_assignments', 'task_id', 'child_id')
+            ->wherePivot('active', true);
     }
 }

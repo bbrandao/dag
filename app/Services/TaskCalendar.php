@@ -20,12 +20,15 @@ final class TaskCalendar
         $activeChildren = fn ($query) => $query->where('users.active', true)
             ->when($childId !== null, fn ($children) => $children->where('users.id', $childId));
 
-        $tasks->whereHas('children', $activeChildren)
-            ->with(['children' => $activeChildren])
-            ->chunkById(100, function ($templates) use ($now): void {
-                foreach ($templates as $task) {
-                    $this->materializeTask($task, $now);
-                }
+        $tasks->whereHas('children', $activeChildren)->select('id')
+            ->eachById(function (TaskTemplate $candidate) use ($now, $activeChildren): void {
+                DB::transaction(function () use ($candidate, $now, $activeChildren): void {
+                    $task = TaskTemplate::whereKey($candidate->id)->lockForUpdate()->first();
+
+                    if ($task !== null) {
+                        $this->materializeTask($task->load(['children' => $activeChildren]), $now);
+                    }
+                });
             });
     }
 
@@ -60,7 +63,14 @@ final class TaskCalendar
             return;
         }
 
-        $rows = $task->children->map(fn ($child) => [
+        $previousCadence = DB::table('task_occurrences')
+            ->where('task_id', $task->id)
+            ->where('frequency', '!=', $task->frequency)
+            ->where('due_on', '>=', $date->toDateString())
+            ->whereIn('child_id', $task->children->modelKeys())
+            ->pluck('child_id');
+
+        $rows = $task->children->reject(fn ($child) => $previousCadence->contains($child->id))->map(fn ($child) => [
             'id' => (string) Str::uuid(),
             'family_id' => $task->family_id,
             'task_id' => $task->id,

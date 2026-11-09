@@ -1,5 +1,5 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import type { FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { type Frequency, formatDate, frequencies, months, weekDays } from '../tasks';
 
 interface Task {
@@ -12,7 +12,10 @@ interface Task {
     starts_on: string;
     weekday_time: string;
     weekend_time: string;
+    photo_mode: string;
     children: string[];
+    child_ids: string[];
+    can_manage: boolean;
 }
 
 function scheduleLabel(task: Task) {
@@ -31,7 +34,10 @@ export default function Tasks({ tasks, children, today }: {
     children: { id: string; name: string }[];
     today: string;
 }) {
-    const form = useForm({
+    const [editing, setEditing] = useState<string | null>(null);
+    const [notice, setNotice] = useState('');
+    const titleInput = useRef<HTMLInputElement>(null);
+    const initial = {
         title: '',
         criteria: '',
         points: 10,
@@ -45,12 +51,65 @@ export default function Tasks({ tasks, children, today }: {
         year_month: 1,
         child_ids: children.length === 1 ? [children[0].id] : [] as string[],
         photo_mode: 'optional',
-    });
+    };
+    const form = useForm(initial);
+    const removal = useForm({});
     const errors = Object.values(form.errors).flat();
+
+    function resetEditor() {
+        setEditing(null);
+        form.setData(initial);
+        form.clearErrors();
+    }
+
+    function editTask(task: Task) {
+        setEditing(task.id);
+        setNotice('');
+        form.clearErrors();
+        form.setData({
+            ...initial,
+            title: task.title,
+            criteria: task.criteria,
+            points: task.points,
+            frequency: task.frequency,
+            starts_on: task.starts_on,
+            weekday_time: task.weekday_time,
+            weekend_time: task.weekend_time,
+            daily_days: task.schedule.days ?? initial.daily_days,
+            weekly_day: task.frequency === 'weekly' ? task.schedule.day ?? 1 : 1,
+            month_day: task.frequency === 'monthly' || task.frequency === 'yearly' ? String(task.schedule.day ?? '') : '',
+            year_month: task.schedule.month ?? 1,
+            child_ids: task.child_ids,
+            photo_mode: task.photo_mode,
+        });
+        titleInput.current?.focus();
+    }
 
     function saveTask(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        form.post('/guardian/tasks', { onSuccess: () => form.reset('title', 'criteria') });
+        setNotice('');
+
+        if (editing) {
+            form.patch(`/guardian/tasks/${editing}`, { onSuccess: () => {
+                resetEditor();
+                setNotice('Tarefa atualizada. As missões abertas mantêm as condições anteriores.');
+            } });
+        } else {
+            form.post('/guardian/tasks', { onSuccess: () => {
+                form.reset('title', 'criteria');
+                setNotice('Tarefa cadastrada.');
+            } });
+        }
+    }
+
+    function removeTask(task: Task) {
+        if (!window.confirm(`Excluir “${task.title}”? Ela deixará de gerar novas missões.`)) return;
+
+        setNotice('');
+        removal.delete(`/guardian/tasks/${task.id}`, { preserveScroll: true, onSuccess: () => {
+            if (editing === task.id) resetEditor();
+            setNotice('Tarefa excluída. As missões já abertas foram preservadas.');
+        } });
     }
 
     return (
@@ -61,13 +120,14 @@ export default function Tasks({ tasks, children, today }: {
                 <Link className="button secondary" href="/app">Voltar</Link>
             </header>
             <section className="card" aria-labelledby="new-task">
-                <h2 id="new-task">Nova tarefa</h2>
+                <h2 id="new-task">{editing ? 'Editar tarefa' : 'Nova tarefa'}</h2>
+                {notice && <p role="status">{notice}</p>}
                 {children.length === 0 ? (
                     <p><Link href="/app">Cadastre um perfil infantil</Link> para atribuir tarefas.</p>
                 ) : (
                     <form onSubmit={saveTask}>
                         <label htmlFor="title">Nome da tarefa</label>
-                        <input id="title" value={form.data.title} maxLength={120} required
+                        <input id="title" ref={titleInput} value={form.data.title} maxLength={120} required
                             placeholder="Arrumar a cama" onChange={event => form.setData('title', event.target.value)} />
                         <label htmlFor="criteria">Como saber se está pronta?</label>
                         <textarea id="criteria" value={form.data.criteria} maxLength={1000} rows={3} required
@@ -158,8 +218,9 @@ export default function Tasks({ tasks, children, today }: {
                         {errors.length > 0 && (
                             <ul className="error" role="alert">{errors.map((error, index) => <li key={index}>{error}</li>)}</ul>
                         )}
-                        <button disabled={form.processing} type="submit">Cadastrar tarefa</button>
-                        {form.recentlySuccessful && <p role="status">Tarefa cadastrada.</p>}
+                        <button disabled={form.processing} type="submit">{editing ? 'Salvar alterações' : 'Cadastrar tarefa'}</button>
+                        {editing && <button className="secondary" type="button" disabled={form.processing}
+                            onClick={resetEditor}>Cancelar edição</button>}
                     </form>
                 )}
             </section>
@@ -174,6 +235,14 @@ export default function Tasks({ tasks, children, today }: {
                         <p>{scheduleLabel(task)} · A partir de {formatDate(task.starts_on)}</p>
                         <p>Seg–sex até {task.weekday_time} · Sáb–dom até {task.weekend_time}</p>
                         <p>{task.children.join(', ')}</p>
+                        {task.can_manage && (
+                            <div className="filters">
+                                <button className="secondary" type="button" disabled={form.processing || removal.processing}
+                                    onClick={() => editTask(task)}>Editar</button>
+                                <button className="secondary" type="button" disabled={form.processing || removal.processing}
+                                    onClick={() => removeTask(task)}>Excluir</button>
+                            </div>
+                        )}
                     </article>
                 ))}
             </section>

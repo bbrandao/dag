@@ -26,6 +26,7 @@ final class TaskController
         $linked = fn ($query) => $query->whereIn('users.id', $children->pluck('id'));
         $tasks = TaskTemplate::where('family_id', $guardian->family_id)
             ->whereHas('children', $linked)
+            ->withCount(['children as active_children_count' => fn ($query) => $query->where('users.active', true)])
             ->with(['children' => fn ($query) => $linked($query)->select('users.id', 'users.name')])
             ->orderBy('title')
             ->get()
@@ -34,6 +35,8 @@ final class TaskController
                 'weekday_time' => substr($task->weekday_time, 0, 5),
                 'weekend_time' => substr($task->weekend_time, 0, 5),
                 'children' => $task->children->pluck('name'),
+                'child_ids' => $task->children->pluck('id'),
+                'can_manage' => $task->children->count() === $task->active_children_count,
             ]);
 
         Inertia::encryptHistory();
@@ -46,6 +49,23 @@ final class TaskController
     }
 
     public function store(Request $request, TaskCalendar $calendar): RedirectResponse
+    {
+        return $this->save($request, $calendar);
+    }
+
+    public function update(Request $request, TaskCalendar $calendar, string $task): RedirectResponse
+    {
+        return $this->save($request, $calendar, $task);
+    }
+
+    public function destroy(Request $request, string $task): RedirectResponse
+    {
+        DB::transaction(fn () => $this->editableTask($request->user(), $task)->delete());
+
+        return redirect()->route('guardian.tasks');
+    }
+
+    private function save(Request $request, TaskCalendar $calendar, ?string $taskId = null): RedirectResponse
     {
         $guardian = $request->user();
         abort_unless($guardian->role === User::GUARDIAN, 403);
@@ -89,7 +109,8 @@ final class TaskController
             throw ValidationException::withMessages(['month_day' => 'Escolha um dia que exista no mês selecionado.']);
         }
 
-        DB::transaction(function () use ($guardian, $data, $schedule, $calendar): void {
+        DB::transaction(function () use ($guardian, $data, $schedule, $calendar, $taskId): void {
+            $task = $taskId === null ? new TaskTemplate : $this->editableTask($guardian, $taskId);
             $children = $this->linkedChildren($guardian)
                 ->whereIn('users.id', $data['child_ids'])
                 ->pluck('users.id');
@@ -98,19 +119,40 @@ final class TaskController
                 throw ValidationException::withMessages(['child_ids' => 'Selecione apenas filhos vinculados ao seu perfil.']);
             }
 
-            $task = TaskTemplate::create([
+            $task->fill([
                 ...array_intersect_key($data, array_flip([
                     'title', 'criteria', 'points', 'frequency', 'starts_on',
                     'weekday_time', 'weekend_time', 'photo_mode',
                 ])),
                 'family_id' => $guardian->family_id,
                 'schedule' => $schedule,
-            ]);
-            $task->children()->attach($children->all(), ['family_id' => $guardian->family_id]);
-            $calendar->materializeTask($task, CarbonImmutable::now($guardian->family->timezone));
+            ])->save();
+
+            DB::table('task_assignments')->where('task_id', $task->id)
+                ->whereNotIn('child_id', $children)->update(['active' => false]);
+            DB::table('task_assignments')->upsert($children->map(fn (string $childId) => [
+                'family_id' => $guardian->family_id,
+                'task_id' => $task->id,
+                'child_id' => $childId,
+                'active' => true,
+            ])->all(), ['task_id', 'child_id'], ['active']);
+            $calendar->materializeTask($task->load('children'), CarbonImmutable::now($guardian->family->timezone));
         });
 
         return redirect()->route('guardian.tasks');
+    }
+
+    private function editableTask(User $guardian, string $id): TaskTemplate
+    {
+        abort_unless($guardian->role === User::GUARDIAN, 403);
+
+        $task = TaskTemplate::where('family_id', $guardian->family_id)->whereKey($id)
+            ->lockForUpdate()->firstOrFail();
+        $children = $this->linkedChildren($guardian)->pluck('users.id');
+        $assigned = $task->children()->where('users.active', true)->pluck('users.id');
+        abort_if($assigned->isEmpty() || $assigned->diff($children)->isNotEmpty(), 404);
+
+        return $task;
     }
 
     public function missions(Request $request, TaskCalendar $calendar): Response

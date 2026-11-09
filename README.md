@@ -41,6 +41,8 @@ Abra [localhost:8000](http://localhost:8000), entre com o WhatsApp do responsáv
 
 Na área do responsável, abra **Gerenciar tarefas** e cadastre uma tarefa atribuída à criança. Escolha a recorrência, os dias, os pontos e os horários de semana e fim de semana. No perfil da criança, **Ver minhas missões** mostra as ocorrências abertas ordenadas pelo prazo, com filtros de periodicidade. O mesmo agendador prepara as ocorrências em segundo plano. A lista também prepara as missões elegíveis ao abrir.
 
+Em **Tarefas cadastradas**, use **Editar** para atualizar a configuração ou **Excluir** para parar de gerar novas missões. A exclusão é lógica. As missões já abertas preservam as condições originais.
+
 ### Build e testes fora do Docker
 
 Com PHP 8.3 ou superior, Composer e Node 22.12 ou 24, execute:

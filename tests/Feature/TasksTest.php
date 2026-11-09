@@ -83,10 +83,43 @@ final class TasksTest extends TestCase
         $this->as($guardian)->post('/guardian/tasks', $this->task($otherChild))->assertSessionHasErrors('child_ids');
         $this->assertDatabaseCount('task_templates', 0);
         $this->post('/guardian/tasks', $this->task($child))->assertSessionHasNoErrors();
+        $task = DB::table('task_templates')->value('id');
         $this->get('/app/missoes')->assertForbidden();
         $this->as($otherGuardian)->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page->has('tasks', 0));
+        $this->patch("/guardian/tasks/{$task}", $this->task($otherChild))->assertNotFound();
+        $this->delete("/guardian/tasks/{$task}")->assertNotFound();
         $this->as($otherChild)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page->has('missions', 0));
         $this->post('/guardian/tasks', $this->task($otherChild))->assertForbidden();
+    }
+
+    public function test_editing_preserves_open_missions_and_soft_deletion_stops_future_missions(): void
+    {
+        [$guardian, $child] = $this->family();
+        $this->as($guardian)->post('/guardian/tasks', $this->task($child, [
+            'frequency' => 'weekly', 'weekly_day' => 3,
+        ]))->assertSessionHasNoErrors();
+        $task = DB::table('task_templates')->value('id');
+        $this->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page
+            ->where('tasks.0.can_manage', true)->where('tasks.0.child_ids.0', $child->id));
+        $this->patch("/guardian/tasks/{$task}", $this->task($child, [
+            'title' => 'Organizar a cama',
+            'points' => 15,
+            'daily_days' => [1, 3, 4, 5],
+        ]))->assertSessionHasNoErrors()->assertRedirect('/guardian/tasks');
+
+        $this->as($child)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.title', 'Arrumar a cama')->where('missions.0.points', 10));
+        $this->travelTo(Carbon::parse('2026-11-12 13:00:00', 'UTC'));
+        $this->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.title', 'Organizar a cama')->where('missions.0.points', 15));
+
+        $this->as($guardian)->delete("/guardian/tasks/{$task}")->assertRedirect('/guardian/tasks');
+        $this->assertSoftDeleted('task_templates', ['id' => $task]);
+        $this->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page->has('tasks', 0));
+        $this->as($child)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page->has('missions', 1));
+        $this->travelTo(Carbon::parse('2026-11-13 13:00:00', 'UTC'));
+        $this->get('/app/missoes')->assertInertia(fn (Assert $page) => $page->has('missions', 0));
+        $this->assertDatabaseCount('task_occurrences', 2);
     }
 
     private function as(User $user): static
