@@ -2,14 +2,16 @@
 
 namespace App\Services;
 
+use App\Repositories\MissionRepository;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 final class EvidencePhoto
 {
+    public function __construct(private readonly MissionRepository $missions) {}
+
     public function store(UploadedFile $file, string $submissionId): string
     {
         $info = @getimagesize($file->getPathname());
@@ -51,13 +53,15 @@ final class EvidencePhoto
 
     public function prune(): void
     {
-        $disk = Storage::disk('local');
-        $submissions = DB::table('mission_submissions');
-        (clone $submissions)->whereNotNull('photo_path')->where('reviewed_at', '<=', now()->subDays(90))
-            ->eachById(function (object $submission) use ($disk, $submissions): void {
-                if ($disk->delete($submission->photo_path)) {
-                    (clone $submissions)->where('id', $submission->id)->update(['photo_path' => null]);
-                }
-            });
+        $this->missions->eachExpiredPhoto(function (object $submission): void {
+            if ($this->remove($submission->photo_path)) {
+                $this->missions->clearPhoto($submission->id);
+            }
+        });
+    }
+
+    public function remove(string $path): bool
+    {
+        return Storage::disk('local')->delete($path);
     }
 }

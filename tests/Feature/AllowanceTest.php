@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Family;
 use App\Models\TaskTemplate;
 use App\Models\User;
+use App\Repositories\AllowanceRepository;
 use App\Services\AllowanceLedger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -91,7 +92,7 @@ final class AllowanceTest extends TestCase
         $this->assertDatabaseHas('settlement_runs', ['child_id' => $child->id, 'competence' => '2026-10-01', 'cutoff_at' => '2026-11-01 03:00:00']);
         $this->assertDatabaseCount('payouts', 1);
         $this->assertDatabaseHas('payouts', ['competence' => '2026-10-01', 'amount_cents' => 100, 'paid_at' => null]);
-        $this->assertSame($november, $ledger->available($child)->sole()->occurrence_id);
+        $this->assertSame($november, app(AllowanceRepository::class)->availableCredits($child)->sole()->occurrence_id);
 
         $preview = $this->get($url)->viewData('page')['props']['preview'];
         $this->post("{$url}/fechar", $preview)->assertSessionHasNoErrors();

@@ -2,12 +2,11 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Family;
 use App\Models\User;
 use App\Support\Phone;
+use App\Services\FamilyProvisioning;
 use Illuminate\Console\Command;
 use Illuminate\Database\UniqueConstraintViolationException;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +16,7 @@ final class ProvisionFamily extends Command
 
     protected $description = 'Cadastra uma família e seu primeiro responsável';
 
-    public function handle(): int
+    public function handle(FamilyProvisioning $families): int
     {
         $data = [
             'family' => trim((string) $this->ask('Nome da família')),
@@ -43,23 +42,7 @@ final class ProvisionFamily extends Command
         }
 
         try {
-            DB::transaction(function () use ($data): void {
-                $family = Family::create(['name' => $data['family'], 'timezone' => $data['timezone']]);
-                $guardian = User::create([
-                    'family_id' => $family->id,
-                    'name' => $data['name'],
-                    'role' => User::GUARDIAN,
-                    'relationship' => $data['relationship'],
-                    'phone' => $data['phone'],
-                    'phone_hash' => Phone::fingerprint($data['phone']),
-                ]);
-                DB::table('audit_events')->insert([
-                    'family_id' => $family->id,
-                    'subject_id' => $guardian->id,
-                    'event' => 'family.provisioned',
-                    'recorded_at' => now(),
-                ]);
-            });
+            $families->provision($data);
         } catch (UniqueConstraintViolationException) {
             $this->error('Não foi possível cadastrar a família com esse número.');
 

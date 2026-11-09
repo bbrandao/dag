@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Family;
 use App\Models\TaskTemplate;
+use App\Repositories\TaskRepository;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
@@ -11,22 +12,18 @@ use Illuminate\Support\Str;
 
 final class TaskCalendar
 {
+    public function __construct(private readonly TaskRepository $tasks) {}
+
     public function materialize(Family $family, ?string $childId = null): void
     {
         $now = CarbonImmutable::now($family->timezone);
-        $tasks = TaskTemplate::where('family_id', $family->id)
-            ->where('starts_on', '<=', $now->toDateString());
-
-        $activeChildren = fn ($query) => $query->where('users.active', true)
-            ->when($childId !== null, fn ($children) => $children->where('users.id', $childId));
-
-        $tasks->whereHas('children', $activeChildren)->select('id')
-            ->eachById(function (TaskTemplate $candidate) use ($now, $activeChildren): void {
-                DB::transaction(function () use ($candidate, $now, $activeChildren): void {
-                    $task = TaskTemplate::whereKey($candidate->id)->lockForUpdate()->first();
+        $this->tasks->eachEligible($family->id, $now->toDateString(), $childId,
+            function (TaskTemplate $candidate) use ($now, $childId): void {
+                DB::transaction(function () use ($candidate, $now, $childId): void {
+                    $task = $this->tasks->lockWithActiveChildren($candidate->id, $childId);
 
                     if ($task !== null) {
-                        $this->materializeTask($task->load(['children' => $activeChildren]), $now);
+                        $this->materializeTask($task, $now);
                     }
                 });
             });
@@ -63,12 +60,7 @@ final class TaskCalendar
             return;
         }
 
-        $previousCadence = DB::table('task_occurrences')
-            ->where('task_id', $task->id)
-            ->where('frequency', '!=', $task->frequency)
-            ->where('due_on', '>=', $date->toDateString())
-            ->whereIn('child_id', $task->children->modelKeys())
-            ->pluck('child_id');
+        $previousCadence = $this->tasks->previousCadenceChildIds($task, $date->toDateString());
 
         $rows = $task->children->reject(fn ($child) => $previousCadence->contains($child->id))->map(fn ($child) => [
             'id' => (string) Str::uuid(),
@@ -86,7 +78,7 @@ final class TaskCalendar
             'photo_mode' => $task->photo_mode,
         ])->all();
 
-        DB::table('task_occurrences')->insertOrIgnore($rows);
+        $this->tasks->insertOccurrences($rows);
     }
 
     private function monthDay(CarbonImmutable $month, ?int $day): CarbonImmutable
