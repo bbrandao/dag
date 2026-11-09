@@ -50,7 +50,7 @@ final class MissionController
         abort_unless($request->user()->role === User::GUARDIAN, 403);
         $data = $request->validate([
             'submission_id' => ['required', 'uuid'],
-            'decision' => ['required', 'in:approved,adjustment'],
+            'decision' => ['required', 'in:approved,rejected,adjustment'],
             'feedback' => ['required_if:decision,adjustment', 'nullable', 'string', 'max:255'],
         ], ['feedback.required_if' => 'Diga o que a criança precisa ajustar.', 'feedback.max' => 'Escreva até 255 caracteres.']);
 

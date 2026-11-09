@@ -75,11 +75,24 @@ final class TaskRepository
 
     public function childMissions(User $child, ?string $frequency, DateTimeInterface $now): Collection
     {
-        return DB::table('task_occurrences')->where('family_id', $child->family_id)->where('child_id', $child->id)
-            ->where('opens_at', '<=', $now)
-            ->where(fn (Builder $query) => $query->where('status', '!=', 'pending')->orWhere('due_at', '>', $now))
+        return $this->openedMissions($child, $now)
             ->when($frequency, fn ($query) => $query->where('frequency', $frequency))
-            ->orderBy('due_at')->orderBy('id')->get(['id', 'title', 'criteria', 'points', 'frequency', 'due_at', 'status']);
+            ->orderBy('due_at')->orderBy('id')->get();
+    }
+
+    public function dashboardMissions(User $child, DateTimeInterface $now): Collection
+    {
+        $missions = $this->openedMissions($child, $now)->whereIn('status', ['pending', 'adjustment']);
+        $open = (clone $missions)->where('due_at', '>', $now)->orderBy('due_at')->orderBy('id')->limit(5)->get();
+        $expired = $missions->where('due_at', '<=', $now)->orderByDesc('due_at')->orderBy('id')->limit(5)->get();
+
+        return $open->concat($expired);
+    }
+
+    private function openedMissions(User $child, DateTimeInterface $now): Builder
+    {
+        return DB::table('task_occurrences')->where('family_id', $child->family_id)->where('child_id', $child->id)
+            ->where('opens_at', '<=', $now)->select(['id', 'title', 'criteria', 'points', 'frequency', 'due_at', 'status']);
     }
 
     private function activeChildren(?string $childId): callable

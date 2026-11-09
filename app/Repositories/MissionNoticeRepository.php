@@ -35,10 +35,11 @@ final class MissionNoticeRepository
             ->update(['status' => 'unknown']);
     }
 
-    public function ready(DateTimeInterface $now, ?string $submission): Collection
+    public function ready(DateTimeInterface $now, ?string $submission, ?string $kind = null): Collection
     {
         return DB::table('mission_notices')->where('status', 'pending')->where('available_at', '<=', $now)
             ->when($submission, fn ($query) => $query->where('submission_id', $submission))
+            ->when($kind, fn ($query) => $query->where('kind', $kind))
             ->orderBy('id')->limit(10)->get();
     }
 
@@ -63,7 +64,10 @@ final class MissionNoticeRepository
     {
         return DB::table('mission_submissions as submissions')
             ->join('task_occurrences as missions', 'missions.id', '=', 'submissions.occurrence_id')
-            ->where('submissions.id', $submission)->firstOrFail(['missions.id', 'missions.family_id', 'missions.child_id']);
+            ->where('submissions.id', $submission)->firstOrFail([
+                'missions.id', 'missions.family_id', 'missions.child_id', 'missions.title', 'missions.due_at',
+                'submissions.submitted_at', 'submissions.comment', 'submissions.photo_path', 'submissions.feedback',
+            ]);
     }
 
     public function guardianIsLinked(string $guardian, string $child): bool

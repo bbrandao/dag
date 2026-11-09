@@ -15,6 +15,7 @@ final class DashboardService
         private readonly FamilyRepository $families,
         private readonly AllowanceRepository $accounts,
         private readonly DashboardRepository $dashboard,
+        private readonly TaskService $tasks,
     ) {}
 
     public function data(User $user): array
@@ -39,6 +40,7 @@ final class DashboardService
             'rateCents' => $rate === null ? null : (int) $rate,
             'progress' => $this->progress($user, $profiles, $month, $now->utc()),
             'earnedPoints' => $user->role === User::CHILD ? $this->accounts->earnedPoints($user) : 0,
+            'childMissions' => $isGuardian ? null : $this->tasks->dashboardMissions($user),
         ];
     }
 

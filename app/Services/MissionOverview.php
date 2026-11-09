@@ -68,6 +68,6 @@ final class MissionOverview
 
     private function localTime(string $value, User $user): CarbonImmutable
     {
-        return CarbonImmutable::parse($value, $user->family->timezone)->setTimezone($user->family->timezone);
+        return CarbonImmutable::parse($value, 'UTC')->setTimezone($user->family->timezone);
     }
 }

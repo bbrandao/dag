@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Family;
 use App\Models\User;
 use App\Services\EvidencePhoto;
+use App\Services\MissionNotices;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
@@ -20,6 +21,8 @@ final class MissionReviewTest extends TestCase
 {
     use RefreshDatabase;
 
+    private bool $gatewayAvailable = true;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -34,10 +37,11 @@ final class MissionReviewTest extends TestCase
         ]);
         Http::preventStrayRequests();
         Http::fake([
-            'https://gateway.example/instance/status' => Http::response([
+            'https://gateway.example/instance/status' => fn () => $this->gatewayAvailable ? Http::response([
                 'status' => ['connected' => true, 'jid' => ['user' => '5571999990000']],
-            ]),
+            ]) : Http::response([], 503),
             'https://gateway.example/send/text' => Http::response(['id' => 'test-message']),
+            'https://gateway.example/send/media' => Http::response(['id' => 'test-image']),
         ]);
     }
 
@@ -59,6 +63,13 @@ final class MissionReviewTest extends TestCase
         $this->post("{$url}/entregas", $payload)->assertRedirect($url)->assertSessionHasNoErrors();
         $attempt = DB::table('mission_submissions')->first();
         $this->assertDatabaseCount('mission_submissions', 1);
+        $this->assertDatabaseHas('mission_notices', ['recipient_id' => $guardian->id, 'kind' => 'submitted', 'status' => 'sent']);
+        $this->assertDatabaseMissing('mission_notices', ['recipient_id' => $child->id]);
+        $caption = "Você tem uma entrega para revisar no DAG:\nArrumar a cama\ndeadline: 09/11/2026 18:00\nconcluído em: 09/11/2026 10:00\n"
+            .$payload['comment']."\nhttps://dag.example{$review}";
+        Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/media'
+            && $request['number'] === '5571999991111' && $request['type'] === 'image' && $request['text'] === $caption
+            && base64_decode($request['file'], true) === Storage::disk('local')->get($attempt->photo_path));
         Storage::disk('local')->assertExists($attempt->photo_path);
         $this->get("{$url}/fotos/{$attempt->id}")->assertOk()->assertHeader('Content-Type', 'image/jpeg');
 
@@ -84,7 +95,7 @@ final class MissionReviewTest extends TestCase
         $this->assertCount(2, $messages);
         $this->assertStringContainsString("https://dag.example{$review}", $messages[0][0]['text']);
         $this->assertStringContainsString("https://dag.example{$url}", $messages[1][0]['text']);
-        $this->assertStringNotContainsString('Muito bem!', $messages[1][0]['text']);
+        $this->assertStringContainsString('Muito bem!', $messages[1][0]['text']);
 
         $this->as($child)->get($url)->assertInertia(fn (Assert $page) => $page
             ->component('Mission')->where('mission.status', 'approved')->where('attempts.0.feedback', 'Muito bem!'));
@@ -95,6 +106,51 @@ final class MissionReviewTest extends TestCase
         app(EvidencePhoto::class)->prune();
         Storage::disk('local')->assertMissing($attempt->photo_path);
         $this->assertDatabaseHas('mission_submissions', ['id' => $attempt->id, 'photo_path' => null]);
+    }
+
+    public function test_rejection_is_final_without_points_and_notifies_both_roles_at_their_step(): void
+    {
+        [$guardian, $child, $mission] = $this->mission('disabled');
+        $this->as($guardian)->patch('/app/avisos', ['enabled' => true]);
+        $this->as($child)->patch('/app/avisos', ['enabled' => true]);
+        $url = "/app/missoes/{$mission}";
+        $review = "/guardian/revisoes/{$mission}";
+        $this->post("{$url}/entregas", ['request_id' => (string) Str::uuid(), 'comment' => 'Terminei.'])
+            ->assertRedirect($url)->assertSessionHasNoErrors();
+        Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text'
+            && $request['number'] === '5571999991111'
+            && $request['text'] === "Você tem uma entrega para revisar no DAG:\nArrumar a cama\ndeadline: 09/11/2026 18:00\nconcluído em: 09/11/2026 10:00\nTerminei.\nhttps://dag.example{$review}");
+
+        $submission = DB::table('mission_submissions')->value('id');
+        $this->as($guardian)->post($review, ['submission_id' => $submission, 'decision' => 'rejected', 'feedback' => 'Faltou a coberta.'])
+            ->assertRedirect($review)->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('point_credits', 0);
+        Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text'
+            && $request['number'] === '5571999992222'
+            && $request['text'] === "Sua missão foi reprovada no DAG:\nArrumar a cama\nFaltou a coberta.\nhttps://dag.example{$url}");
+        $this->as($child)->get($url)->assertInertia(fn (Assert $page) => $page
+            ->where('mission.status', 'rejected')->where('attempts.0.decision', 'rejected'));
+        $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->where('events.0.message', 'Missão reprovada'));
+        $this->post("{$url}/entregas", ['request_id' => (string) Str::uuid()])->assertSessionHasErrors('mission');
+        $this->assertDatabaseCount('mission_submissions', 1);
+    }
+
+    public function test_guardian_notice_retries_after_a_temporary_gateway_failure_without_a_review(): void
+    {
+        [$guardian, $child, $mission] = $this->mission('disabled');
+        $this->as($guardian)->patch('/app/avisos', ['enabled' => true]);
+        $this->gatewayAvailable = false;
+        $this->as($child)->post("/app/missoes/{$mission}/entregas", ['request_id' => (string) Str::uuid()])
+            ->assertRedirect("/app/missoes/{$mission}")->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('mission_notices', ['kind' => 'submitted', 'status' => 'pending', 'attempts' => 1]);
+
+        $this->gatewayAvailable = true;
+        $this->travel(30)->seconds();
+        app(MissionNotices::class)->deliver();
+        $this->assertDatabaseHas('mission_notices', ['kind' => 'submitted', 'status' => 'sent', 'attempts' => 2]);
+        $this->assertDatabaseHas('task_occurrences', ['id' => $mission, 'status' => 'in_review']);
+        Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text'
+            && $request['number'] === '5571999991111');
     }
 
     public function test_adjustment_requires_feedback_and_expired_mission_requires_reopening(): void

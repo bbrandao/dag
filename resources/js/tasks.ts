@@ -12,7 +12,8 @@ export const missionStatuses = {
     in_review: 'Em revisão',
     adjustment: 'Precisa de ajuste',
     approved: 'Aprovada',
-    expired: 'Prazo encerrado',
+    rejected: 'Reprovada',
+    expired: 'Vencida',
 };
 
 export type MissionStatus = keyof typeof missionStatuses;

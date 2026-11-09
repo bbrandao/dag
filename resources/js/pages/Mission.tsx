@@ -16,7 +16,7 @@ interface MissionDetails {
 interface Attempt {
     id: string;
     comment: string | null;
-    decision: 'approved' | 'adjustment' | null;
+    decision: 'approved' | 'rejected' | 'adjustment' | null;
     feedback: string | null;
     photo_url: string | null;
     submitted_at: string;
@@ -88,7 +88,7 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
 }
 
 function GuardianActions({ mission, attempt }: { mission: MissionDetails; attempt: Attempt | undefined }) {
-    const review = useForm({ submission_id: attempt?.id ?? '', decision: 'approved', feedback: '' });
+    const review = useForm({ submission_id: attempt?.id ?? '', decision: '', feedback: '' });
     const reopen = useForm({ new_due_at: '', reason: '' });
     const url = `/guardian/revisoes/${mission.id}`;
 
@@ -98,8 +98,10 @@ function GuardianActions({ mission, attempt }: { mission: MissionDetails; attemp
                 <h2>Revisar entrega</h2>
                 <form onSubmit={event => { event.preventDefault(); review.post(url); }}>
                     <label htmlFor="decision">Resultado</label>
-                    <select id="decision" value={review.data.decision} onChange={event => review.setData('decision', event.target.value)}>
+                    <select id="decision" required value={review.data.decision} onChange={event => review.setData('decision', event.target.value)}>
+                        <option value="" disabled>Escolha o resultado</option>
                         <option value="approved">Aprovar</option>
+                        <option value="rejected">Reprovar</option>
                         <option value="adjustment">Pedir ajuste</option>
                     </select>
                     <ShortText id="feedback" label={review.data.decision === 'adjustment' ? 'O que precisa ajustar?' : 'Mensagem opcional'}
@@ -141,8 +143,8 @@ export default function Mission({ mission, attempts, reopening, requestId, isGua
                 <h1>{mission.title}</h1>
                 <Link className="button secondary" href={isGuardian ? '/guardian/revisoes' : '/app/missoes'}>Voltar</Link>
             </header>
-            <section className="card">
-                <p className="tag">{missionStatuses[mission.status]} · {mission.points} pontos</p>
+            <section className={mission.status === 'expired' ? 'card mission-expired' : 'card'}>
+                <p className={mission.status === 'expired' ? 'tag tag-expired' : 'tag'}>{missionStatuses[mission.status]} · {mission.points} pontos</p>
                 <p>Prazo {mission.due}</p>
                 <p className="criteria">{mission.criteria}</p>
                 {reopening && <p>Reaberta. Data original {formatDate(mission.original_date)}. {reopening}</p>}

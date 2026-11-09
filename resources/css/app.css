@@ -19,6 +19,8 @@ h1 { font-size: clamp(1.8rem, 6vw, 2.5rem); }
 .topbar .brand { margin: 0; }
 .card { background: #fff; border: 1px solid #e4d8ef; border-radius: 1.4rem; padding: clamp(1rem, 5vw, 2rem); margin-bottom: 1rem; }
 .card > :last-child { margin-bottom: 0; }
+.card.mission-expired { background: #fff3ef; border-color: #d98e7f; }
+.tag.tag-expired { background: #f9d5cc; color: #78271e; }
 .tag { display: inline-block; border-radius: 2rem; background: #bfefd5; padding: .25rem .7rem; font-weight: 700; }
 .reward { background: #ffd45c; }
 form { display: grid; gap: .45rem; }

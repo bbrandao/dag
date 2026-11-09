@@ -16,6 +16,18 @@ final class Uazapi
 
     public function sendText(string $phone, #[\SensitiveParameter] string $message, string $purpose = 'avisos'): string
     {
+        return $this->send($phone, '/send/text', ['text' => $message, 'linkPreview' => false], $purpose, 5);
+    }
+
+    public function sendImage(string $phone, #[\SensitiveParameter] string $image, #[\SensitiveParameter] string $caption): string
+    {
+        return $this->send($phone, '/send/media', [
+            'type' => 'image', 'file' => base64_encode($image), 'text' => $caption,
+        ], 'avisos', 15);
+    }
+
+    private function send(string $phone, string $endpoint, #[\SensitiveParameter] array $payload, string $purpose, int $timeout): string
+    {
         $url = config('dag.uazapi.url');
         $token = config('dag.uazapi.token');
         $sender = config('dag.uazapi.sender');
@@ -70,11 +82,7 @@ final class Uazapi
             }
 
             $sending = true;
-            $response = $gateway->timeout(5)->post('/send/text', [
-                'number' => substr($phone, 1),
-                'text' => $message,
-                'linkPreview' => false,
-            ]);
+            $response = $gateway->timeout($timeout)->post($endpoint, ['number' => substr($phone, 1), ...$payload]);
         } catch (ConnectionException) {
             Log::warning("WhatsApp {$purpose}: falha de conexão com o gateway.", ['sending' => $sending]);
 

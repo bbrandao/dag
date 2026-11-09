@@ -96,21 +96,39 @@ final class TaskService
         $this->calendar->materialize($family, $child->id);
         $now = now();
         $missions = $this->tasks->childMissions($child, $frequency, $now)
-            ->map(function ($mission) use ($family) {
-                $dueAt = CarbonImmutable::parse($mission->due_at, 'UTC')->setTimezone($family->timezone);
-
-                return [
-                    ...((array) $mission),
-                    'due_at' => $dueAt->toIso8601String(),
-                    'due_on' => $dueAt->toDateString(),
-                    'due_time' => $dueAt->format('H:i'),
-                ];
-            });
+            ->map(fn (object $mission) => $this->displayMission($mission, $family->timezone, $now));
 
         return [
             'missions' => $missions,
             'frequency' => $frequency,
-            'today' => $now->setTimezone($family->timezone)->toDateString(),
+            'today' => $now->copy()->setTimezone($family->timezone)->toDateString(),
+        ];
+    }
+
+    public function dashboardMissions(User $child): array
+    {
+        abort_unless($child->role === User::CHILD, 403);
+        $now = now();
+        $timezone = $child->family->timezone;
+
+        return [
+            'missions' => $this->tasks->dashboardMissions($child, $now)
+                ->map(fn (object $mission) => $this->displayMission($mission, $timezone, $now)),
+            'today' => $now->copy()->setTimezone($timezone)->toDateString(),
+        ];
+    }
+
+    private function displayMission(object $mission, string $timezone, \DateTimeInterface $now): array
+    {
+        $due = CarbonImmutable::parse($mission->due_at, 'UTC')->setTimezone($timezone);
+        $expired = in_array($mission->status, ['pending', 'adjustment'], true) && $due->lte($now);
+
+        return [
+            ...(array) $mission,
+            'status' => $expired ? 'expired' : $mission->status,
+            'due_at' => $due->toIso8601String(),
+            'due_on' => $due->toDateString(),
+            'due_time' => $due->format('H:i'),
         ];
     }
 

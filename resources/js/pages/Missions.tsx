@@ -1,32 +1,22 @@
 import { Head, Link } from '@inertiajs/react';
-import { type Frequency, type MissionStatus, formatDate, frequencies, missionStatuses } from '../tasks';
-
-interface Mission {
-    id: string;
-    title: string;
-    criteria: string;
-    points: number;
-    frequency: Frequency;
-    due_at: string;
-    due_on: string;
-    due_time: string;
-    status: MissionStatus;
-}
+import { type Frequency } from '../tasks';
+import { MissionCard, type MissionSummary } from '../MissionCard';
 
 const filters: [Frequency | null, string][] = [
     [null, 'Todas'], ['daily', 'Diárias'], ['weekly', 'Semanais'], ['monthly', 'Mensais'], ['yearly', 'Anuais'],
 ];
 
 export default function Missions({ missions, frequency, today }: {
-    missions: Mission[];
+    missions: MissionSummary[];
     frequency: Frequency | null;
     today: string;
 }) {
-    const pending = missions.filter(mission => mission.status === 'pending');
+    const open = missions.filter(mission => mission.status === 'pending' || mission.status === 'adjustment');
     const groups = [
-        { title: 'Hoje', missions: pending.filter(mission => mission.due_on === today) },
-        { title: 'Próximas', missions: pending.filter(mission => mission.due_on !== today) },
-        { title: 'Entregas e retornos', missions: missions.filter(mission => mission.status !== 'pending') },
+        { title: 'Hoje', missions: open.filter(mission => mission.due_on === today) },
+        { title: 'Próximas', missions: open.filter(mission => mission.due_on !== today) },
+        { title: 'Vencidas', missions: missions.filter(mission => mission.status === 'expired').reverse() },
+        { title: 'Entregas e retornos', missions: missions.filter(mission => ['in_review', 'approved', 'rejected'].includes(mission.status)) },
     ];
 
     return (
@@ -47,21 +37,7 @@ export default function Missions({ missions, frequency, today }: {
             {groups.filter(group => group.missions.length > 0).map(group => (
                 <section key={group.title} aria-label={group.title}>
                     <h2>{group.title}</h2>
-                    {group.missions.map(mission => (
-                        <article className="card" key={mission.id}>
-                            <p className="tag reward">+{mission.points} pontos</p>
-                            <h3>{mission.title}</h3>
-                            <p>{frequencies[mission.frequency]} · <time dateTime={mission.due_at}>
-                                {mission.due_on === today ? 'Hoje' : formatDate(mission.due_on)} até {mission.due_time}
-                            </time></p>
-                            <p className="criteria">{mission.criteria}</p>
-                            <Link className="button secondary" href={`/app/missoes/${mission.id}`}>
-                                {mission.status === 'pending' ? 'Concluir' : missionStatuses[
-                                    mission.status === 'adjustment' && Date.parse(mission.due_at) <= Date.now() ? 'expired' : mission.status
-                                ]}
-                            </Link>
-                        </article>
-                    ))}
+                    {group.missions.map(mission => <MissionCard key={mission.id} mission={mission} today={today} />)}
                 </section>
             ))}
         </main>

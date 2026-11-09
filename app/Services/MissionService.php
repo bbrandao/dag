@@ -77,7 +77,7 @@ final class MissionService
             throw $error;
         }
 
-        defer(fn () => $this->notices->deliver($submissionId));
+        defer(fn () => $this->notices->deliver($submissionId, 'submitted'))->always();
     }
 
     public function review(User $guardian, string $mission, array $data): void
@@ -109,7 +109,7 @@ final class MissionService
             $this->notices->queue($occurrence, $attempt->id, $data['decision']);
         });
 
-        defer(fn () => $this->notices->deliver($data['submission_id']));
+        defer(fn () => $this->notices->deliver($data['submission_id'], $data['decision']))->always();
     }
 
     public function reopen(User $guardian, string $mission, array $data): void

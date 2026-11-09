@@ -21,6 +21,7 @@ final class InboxService
                 'title' => $event->title,
                 'message' => $guardian ? 'Entrega enviada para revisão' : match ($event->decision) {
                     'approved' => 'Missão aprovada',
+                    'rejected' => 'Missão reprovada',
                     'adjustment' => 'O responsável pediu um ajuste',
                 },
                 'href' => route($guardian ? 'reviews.show' : 'missions.show', $event->mission_id, false),

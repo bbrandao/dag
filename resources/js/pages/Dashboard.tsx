@@ -1,5 +1,6 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import ChildProfileForm from './ChildProfileForm';
+import { MissionCard, type MissionSummary } from '../MissionCard';
 
 const reais = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const money = (cents: number) => reais.format(cents / 100);
@@ -29,9 +30,10 @@ interface DashboardProps {
     monthLabel: string;
     rateCents: number | null;
     progress: Progress[];
+    childMissions: { missions: MissionSummary[]; today: string } | null;
 }
 
-export default function Dashboard({ name, role, family, children, whatsappNotices, earnedPoints, monthLabel, rateCents, progress }: DashboardProps) {
+export default function Dashboard({ name, role, family, children, whatsappNotices, earnedPoints, monthLabel, rateCents, progress, childMissions }: DashboardProps) {
     const notices = useForm({ enabled: whatsappNotices });
     const isGuardian = role === 'guardian';
     const firstChild = children[0];
@@ -56,6 +58,15 @@ export default function Dashboard({ name, role, family, children, whatsappNotice
                     {!isGuardian && <Link className="button secondary" href="/app/ganhos">Ver meus ganhos</Link>}
                 </div>
             </section>
+            {childMissions && [
+                { title: 'Missões a fazer', missions: childMissions.missions.filter(mission => mission.status !== 'expired') },
+                { title: 'Missões vencidas', missions: childMissions.missions.filter(mission => mission.status === 'expired') },
+            ].filter(group => group.missions.length > 0).map(group => (
+                <section key={group.title} aria-label={group.title}>
+                    <h2>{group.title}</h2>
+                    {group.missions.map(mission => <MissionCard key={mission.id} mission={mission} today={childMissions.today} />)}
+                </section>
+            ))}
             {isGuardian && firstChild && (
                 <section className="card">
                     <h2>Valor de cada ponto</h2>
