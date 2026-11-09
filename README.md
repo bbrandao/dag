@@ -9,6 +9,7 @@ PWA familiar para organizar tarefas recorrentes e transformar entregas aprovadas
 | [Arquitetura e operação](docs/03-arquitetura.md) | Stack, dados, rotas, WhatsApp, privacidade, Docker e Easypanel |
 | [Backlog e critérios de aceite](docs/04-entrega.md) | Ordem de implementação, testes e preparação do piloto |
 | [Planilhas e benchmark](docs/05-referencias.md) | Orientações para histórico, exemplos de cadastro e fontes |
+| [Publicação no EasyPanel](docs/06-deploy-easypanel.md) | Deploy na VPS com PostgreSQL externo |
 
 ## Decisões confirmadas para o piloto
 
@@ -48,7 +49,7 @@ Em **Tarefas cadastradas**, use **Editar** para atualizar a configuração ou **
 
 Em **Ver minhas missões**, a criança abre uma missão, confirma a conclusão e pode enviar comentário e foto conforme a configuração. Em **Revisar missões**, o responsável aprova, pede ajuste ou reabre uma missão vencida. A aprovação credita pontos no perfil da criança.
 
-Cada perfil pode habilitar os avisos do WhatsApp no painel. Use uma `APP_URL` acessível a quem vai abrir os links das mensagens. O volume `evidence_data` guarda as fotos privadas no Compose. O serviço `scheduler` faz novas tentativas de aviso e limpa fotos revisadas há 90 dias. No Easypanel, configure o processo `php artisan schedule:work` com acesso ao mesmo banco e volume privado da aplicação.
+Cada perfil pode habilitar os avisos do WhatsApp no painel. Use uma `APP_URL` acessível a quem vai abrir os links das mensagens. O volume `evidence_data` guarda as fotos privadas no Compose. O serviço `scheduler` faz novas tentativas de aviso e limpa fotos revisadas há 90 dias.
 
 No painel do responsável, use **Configurar valor do ponto** para definir a taxa da família em centavos por ponto. A primeira taxa dá valor aos créditos existentes. As taxas seguintes passam a valer para missões abertas depois da mudança. Em **Acompanhamento dos filhos**, cada perfil tem um resumo das missões e dos ganhos. Use **Encerrar ciclo de mesada** para fechar manualmente e **Marcar como paga** depois do pagamento. O serviço `scheduler` processa o fechamento automático com o corte do primeiro dia do mês no fuso da família. A criança acompanha as missões no painel e consulta saldos, extrato e histórico em **Ver meus ganhos**.
 
@@ -67,4 +68,6 @@ composer test
 
 Os testes de autenticação usam SQLite em memória e respostas simuladas da uazapi. Para rodar só o PostgreSQL em Docker, execute `docker compose up -d database`. De fora do Docker, use `127.0.0.1:5433` com o banco, usuário e senha do `.env`. Se o Laravel também rodar fora do Docker, ajuste `DB_HOST=127.0.0.1` e `DB_PORT=5433`, gere `APP_KEY` com `php artisan key:generate`, rode as migrações e inicie `php artisan serve`. Para voltar a rodar o Laravel no Compose, restaure `DB_HOST=database` e `DB_PORT=5432`.
 
-Em HTTPS no Easypanel, configure `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL` do domínio e `SESSION_SECURE_COOKIE=true`.
+## Publicar em produção
+
+Use o [guia do EasyPanel](docs/06-deploy-easypanel.md) e o [Compose de produção](compose.production.yaml), que sobe o app e o agendador com PostgreSQL externo.
