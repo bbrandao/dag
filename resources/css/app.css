@@ -43,3 +43,12 @@ button:disabled { opacity: .65; cursor: wait; }
 .filters { margin-bottom: 1rem; }
 .criteria { white-space: pre-wrap; overflow-wrap: anywhere; }
 .evidence { display: block; max-width: 100%; max-height: 24rem; border-radius: .65rem; margin: .65rem 0; }
+.ledger-entry { padding: .8rem 0; border-top: 1px solid #e4d8ef; }
+.ledger-entry p { margin: 0 0 .35rem; }
+.ledger-entry button { margin-top: .5rem; }
+.table-scroll { overflow-x: auto; }
+.table-scroll table { width: 100%; border-collapse: collapse; }
+.table-scroll th, .table-scroll td { padding: .55rem; border-bottom: 1px solid #e4d8ef; text-align: left; }
+.pwa-bar { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; max-width: 40rem; margin: auto; padding: .65rem 1rem 0; }
+.pwa-bar a { color: #452497; font-weight: 700; }
+.pwa-bar p { flex-basis: 100%; margin: 0; }

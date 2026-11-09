@@ -11,6 +11,11 @@ class HandleInertiaRequests extends Middleware
 {
     protected $rootView = 'app';
 
+    public function share(Request $request): array
+    {
+        return [...parent::share($request), 'authenticated' => fn () => $request->user() !== null];
+    }
+
     public function handle(Request $request, Closure $next): Response
     {
         $response = parent::handle($request, $next);

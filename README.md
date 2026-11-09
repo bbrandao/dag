@@ -50,6 +50,10 @@ Em **Ver minhas missões**, a criança abre uma missão, confirma a conclusão e
 
 Cada perfil pode habilitar os avisos do WhatsApp no painel. Use uma `APP_URL` acessível a quem vai abrir os links das mensagens. O volume `evidence_data` guarda as fotos privadas no Compose. O serviço `scheduler` faz novas tentativas de aviso e limpa fotos revisadas há 90 dias. No Easypanel, configure o processo `php artisan schedule:work` com acesso ao mesmo banco e volume privado da aplicação.
 
+Em **Filhos vinculados → Mesadas**, o responsável define a taxa da família em centavos por ponto. A primeira taxa dá valor aos créditos existentes. As taxas seguintes passam a valer para missões abertas depois da mudança. Use **Gerar conta** para fechar manualmente e **Marcar como paga** depois do pagamento. O serviço `scheduler` processa o fechamento automático com o corte do primeiro dia do mês no fuso da família. A criança acompanha saldos, extrato e histórico em **Ver meus ganhos**.
+
+Use **Instalar DAG** em um navegador compatível. No iPhone, abra no Safari e use **Compartilhar → Adicionar à Tela de Início**. O PWA requer HTTPS fora de `localhost`. **Avisos** mostra entregas e revisões e atualiza a contagem enquanto o app estiver visível. A tela sem internet é genérica, e os dados autenticados são buscados na rede.
+
 ### Build e testes fora do Docker
 
 Com PHP 8.3 ou superior, Composer e Node 22.12 ou 24, execute:

@@ -68,6 +68,11 @@ final class MissionReviewTest extends TestCase
         $this->get($review)->assertNotFound();
         $this->as($guardian)->get('/guardian/revisoes')->assertInertia(fn (Assert $page) => $page
             ->component('Reviews')->where('missions.0.id', $mission));
+        $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 1]);
+        $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page
+            ->component('Inbox')->where('events.0.href', $review));
+        $this->patch('/app/avisos/lidos', ['ids' => [$attempt->id]])->assertRedirect('/app/avisos');
+        $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 0]);
 
         $decision = ['submission_id' => $attempt->id, 'decision' => 'approved', 'feedback' => 'Muito bem!'];
         $this->post($review, $decision)->assertRedirect($review)->assertSessionHasNoErrors();
@@ -84,6 +89,7 @@ final class MissionReviewTest extends TestCase
         $this->as($child)->get($url)->assertInertia(fn (Assert $page) => $page
             ->component('Mission')->where('mission.status', 'approved')->where('attempts.0.feedback', 'Muito bem!'));
         $this->get('/app')->assertInertia(fn (Assert $page) => $page->where('earnedPoints', 10));
+        $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 1]);
 
         $this->travel(91)->days();
         app(EvidencePhoto::class)->prune();

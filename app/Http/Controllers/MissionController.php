@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Family;
+use App\Services\AllowanceLedger;
 use App\Services\EvidencePhoto;
 use App\Services\MissionNotices;
 use Carbon\CarbonImmutable;
@@ -138,7 +140,7 @@ final class MissionController
         return redirect()->route('missions.show', $mission);
     }
 
-    public function review(Request $request, string $mission, MissionNotices $notices): RedirectResponse
+    public function review(Request $request, string $mission, MissionNotices $notices, AllowanceLedger $ledger): RedirectResponse
     {
         $guardian = $request->user();
         abort_unless($guardian->role === User::GUARDIAN, 403);
@@ -148,7 +150,8 @@ final class MissionController
             'feedback' => ['required_if:decision,adjustment', 'nullable', 'string', 'max:255'],
         ], ['feedback.required_if' => 'Diga o que a criança precisa ajustar.', 'feedback.max' => 'Escreva até 255 caracteres.']);
 
-        DB::transaction(function () use ($guardian, $mission, $data, $notices): void {
+        DB::transaction(function () use ($guardian, $mission, $data, $notices, $ledger): void {
+            $family = Family::whereKey($guardian->family_id)->lockForUpdate()->firstOrFail();
             $occurrence = $this->accessible($guardian)->where('id', $mission)->lockForUpdate()->firstOrFail();
             $submission = DB::table('mission_submissions')->where('occurrence_id', $mission)
                 ->where('id', $data['submission_id']);
@@ -160,7 +163,7 @@ final class MissionController
                 throw ValidationException::withMessages(['mission' => 'Esta entrega já recebeu uma revisão.']);
             }
 
-            $now = now();
+            $now = $ledger->now($family)->utc();
             $submission->update([
                 'decision' => $data['decision'],
                 'feedback' => $data['feedback'] ?? null,
@@ -169,9 +172,7 @@ final class MissionController
             ]);
             DB::table('task_occurrences')->where('id', $mission)->update(['status' => $data['decision']]);
             if ($data['decision'] === 'approved') {
-                DB::table('point_credits')->insert([
-                    'occurrence_id' => $mission, 'points' => $occurrence->points, 'approved_at' => $now,
-                ]);
+                $ledger->credit($occurrence, $now);
             }
             $notices->queue($occurrence, $attempt->id, $data['decision']);
         });

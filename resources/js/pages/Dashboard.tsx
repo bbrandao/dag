@@ -31,6 +31,7 @@ export default function Dashboard({ name, role, family, children, whatsappNotice
                         {isGuardian ? 'Gerenciar tarefas' : 'Ver minhas missões'}
                     </Link>
                     {isGuardian && <Link className="button secondary" href="/guardian/revisoes">Revisar missões</Link>}
+                    {!isGuardian && <Link className="button secondary" href="/app/ganhos">Ver meus ganhos</Link>}
                 </div>
             </section>
             <section className="card">
@@ -52,6 +53,7 @@ export default function Dashboard({ name, role, family, children, whatsappNotice
                         <ul>{children.map(child => (
                             <li key={child.id}>
                                 {child.name} <Link href={`/guardian/children/${child.id}/editar`} aria-label={`Editar perfil de ${child.name}`}>Editar</Link>
+                                {' · '}<Link href={`/guardian/mesadas/${child.id}`} aria-label={`Ver mesadas de ${child.name}`}>Mesadas</Link>
                             </li>
                         ))}</ul>
                     ) : <p>Cadastre o primeiro perfil da família.</p>}

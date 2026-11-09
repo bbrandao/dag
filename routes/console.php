@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Family;
+use App\Models\User;
+use App\Services\AllowanceLedger;
 use App\Services\EvidencePhoto;
 use App\Services\MissionNotices;
 use App\Services\TaskCalendar;
@@ -22,3 +24,8 @@ Schedule::call(fn () => app(MissionNotices::class)->deliver())
 
 Schedule::call(fn () => app(EvidencePhoto::class)->prune())
     ->name('dag:prune-reviewed-mission-photos')->daily()->withoutOverlapping();
+
+Schedule::call(function (): void {
+    $ledger = app(AllowanceLedger::class);
+    User::where('role', User::CHILD)->where('active', true)->eachById(fn (User $child) => $ledger->settle($child));
+})->name('dag:close-monthly-allowances')->everyMinute()->withoutOverlapping();
