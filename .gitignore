@@ -17,4 +17,5 @@
 /storage/framework/views/*
 !/storage/framework/views/.gitkeep
 /storage/inertia-devtools/
+/storage/framework/testing/
 /bootstrap/cache/*.php

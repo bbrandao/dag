@@ -11,6 +11,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -77,6 +78,15 @@ final class FamilyLoginTest extends TestCase
         Http::assertNothingSent();
         $this->post('/auth/otp/verify', ['code' => '123456'])->assertSessionHasErrors('code');
         $this->assertGuest();
+    }
+
+    public function test_otp_returns_to_an_authenticated_mission_link(): void
+    {
+        $this->guardian();
+        $link = '/guardian/revisoes/'.Str::uuid();
+        $this->get($link)->assertRedirect('/login');
+        $this->post('/auth/otp', ['phone' => self::GUARDIAN_PHONE])->assertRedirect('/login');
+        $this->post('/auth/otp/verify', ['code' => $this->sentCode(self::GUARDIAN_PHONE)])->assertRedirect($link);
     }
 
     public function test_remember_cookie_restores_the_session_until_logout(): void

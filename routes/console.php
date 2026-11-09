@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\Family;
+use App\Services\EvidencePhoto;
+use App\Services\MissionNotices;
 use App\Services\TaskCalendar;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
@@ -14,3 +16,9 @@ Schedule::call(function (): void {
     $calendar = app(TaskCalendar::class);
     Family::eachById(fn (Family $family) => $calendar->materialize($family));
 })->name('dag:materialize-tasks')->everyMinute()->withoutOverlapping();
+
+Schedule::call(fn () => app(MissionNotices::class)->deliver())
+    ->name('dag:deliver-mission-notices')->everyMinute()->withoutOverlapping();
+
+Schedule::call(fn () => app(EvidencePhoto::class)->prune())
+    ->name('dag:prune-reviewed-mission-photos')->daily()->withoutOverlapping();

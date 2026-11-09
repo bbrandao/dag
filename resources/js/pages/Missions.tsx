@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { type Frequency, formatDate, frequencies } from '../tasks';
+import { type Frequency, type MissionStatus, formatDate, frequencies, missionStatuses } from '../tasks';
 
 interface Mission {
     id: string;
@@ -10,6 +10,7 @@ interface Mission {
     due_at: string;
     due_on: string;
     due_time: string;
+    status: MissionStatus;
 }
 
 const filters: [Frequency | null, string][] = [
@@ -21,9 +22,11 @@ export default function Missions({ missions, frequency, today }: {
     frequency: Frequency | null;
     today: string;
 }) {
+    const pending = missions.filter(mission => mission.status === 'pending');
     const groups = [
-        { title: 'Hoje', missions: missions.filter(mission => mission.due_on === today) },
-        { title: 'Próximas', missions: missions.filter(mission => mission.due_on !== today) },
+        { title: 'Hoje', missions: pending.filter(mission => mission.due_on === today) },
+        { title: 'Próximas', missions: pending.filter(mission => mission.due_on !== today) },
+        { title: 'Entregas e retornos', missions: missions.filter(mission => mission.status !== 'pending') },
     ];
 
     return (
@@ -40,7 +43,7 @@ export default function Missions({ missions, frequency, today }: {
                         href={value ? `/app/missoes?frequency=${value}` : '/app/missoes'}>{label}</Link>
                 ))}
             </nav>
-            {missions.length === 0 && <p className="card">Nenhuma missão pendente neste filtro.</p>}
+            {missions.length === 0 && <p className="card">Nenhuma missão neste filtro.</p>}
             {groups.filter(group => group.missions.length > 0).map(group => (
                 <section key={group.title} aria-label={group.title}>
                     <h2>{group.title}</h2>
@@ -52,6 +55,11 @@ export default function Missions({ missions, frequency, today }: {
                                 {mission.due_on === today ? 'Hoje' : formatDate(mission.due_on)} até {mission.due_time}
                             </time></p>
                             <p className="criteria">{mission.criteria}</p>
+                            <Link className="button secondary" href={`/app/missoes/${mission.id}`}>
+                                {mission.status === 'pending' ? 'Concluir' : missionStatuses[
+                                    mission.status === 'adjustment' && Date.parse(mission.due_at) <= Date.now() ? 'expired' : mission.status
+                                ]}
+                            </Link>
                         </article>
                     ))}
                 </section>

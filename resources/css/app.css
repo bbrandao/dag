@@ -42,3 +42,4 @@ button:disabled { opacity: .65; cursor: wait; }
 .days, .filters { display: flex; flex-wrap: wrap; gap: .5rem; }
 .filters { margin-bottom: 1rem; }
 .criteria { white-space: pre-wrap; overflow-wrap: anywhere; }
+.evidence { display: block; max-width: 100%; max-height: 24rem; border-radius: .65rem; margin: .65rem 0; }

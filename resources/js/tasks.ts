@@ -7,6 +7,16 @@ export const frequencies = {
 
 export type Frequency = keyof typeof frequencies;
 
+export const missionStatuses = {
+    pending: 'A fazer',
+    in_review: 'Em revisão',
+    adjustment: 'Precisa de ajuste',
+    approved: 'Aprovada',
+    expired: 'Prazo encerrado',
+};
+
+export type MissionStatus = keyof typeof missionStatuses;
+
 export const weekDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
 export const months = [

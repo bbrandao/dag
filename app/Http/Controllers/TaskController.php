@@ -168,13 +168,12 @@ final class TaskController
         $missions = DB::table('task_occurrences')
             ->where('family_id', $child->family_id)
             ->where('child_id', $child->id)
-            ->where('status', 'pending')
             ->where('opens_at', '<=', $now)
-            ->where('due_at', '>', $now)
+            ->where(fn (Builder $query) => $query->where('status', '!=', 'pending')->orWhere('due_at', '>', $now))
             ->when($frequency, fn ($query) => $query->where('frequency', $frequency))
             ->orderBy('due_at')
             ->orderBy('id')
-            ->get(['id', 'title', 'criteria', 'points', 'frequency', 'due_at'])
+            ->get(['id', 'title', 'criteria', 'points', 'frequency', 'due_at', 'status'])
             ->map(function ($mission) use ($family) {
                 $dueAt = CarbonImmutable::parse($mission->due_at, 'UTC')->setTimezone($family->timezone);
 

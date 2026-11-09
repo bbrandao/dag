@@ -10,13 +10,15 @@ FROM composer:2 AS composer
 
 FROM php:8.3-apache-bookworm
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq-dev unzip \
-    && docker-php-ext-install pdo_pgsql \
+    && apt-get install -y --no-install-recommends libpq-dev libjpeg62-turbo-dev libpng-dev libwebp-dev unzip \
+    && docker-php-ext-configure gd --with-jpeg --with-webp \
+    && docker-php-ext-install pdo_pgsql gd \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/html
 COPY --from=composer /usr/bin/composer /usr/bin/composer
 COPY docker/dag.conf /etc/apache2/sites-available/000-default.conf
+COPY docker/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 COPY artisan composer.json composer.lock* ./
 COPY app/ app/
 COPY bootstrap/ bootstrap/

@@ -32,16 +32,21 @@ A versão atual cobre provisionamento da família, cadastro infantil, login por 
 ```sh
 docker compose build
 docker compose run --rm --no-deps app php artisan key:generate --show
-docker compose up -d
+docker compose up -d app
 docker compose exec app php artisan migrate --force
+docker compose up -d scheduler
 docker compose exec app php artisan dag:provision-family
 ```
 
-Abra [localhost:8000](http://localhost:8000), entre com o WhatsApp do responsável provisionado, cadastre um perfil infantil com o número próprio e saia. Entre com o número da criança para conferir a separação dos perfis. Para a limpeza periódica dos desafios expirados, execute `docker compose exec app php artisan schedule:work` em outro terminal durante o piloto local.
+Abra [localhost:8000](http://localhost:8000), entre com o WhatsApp do responsável provisionado, cadastre um perfil infantil com o número próprio e saia. Entre com o número da criança para conferir a separação dos perfis. O serviço `scheduler` limpa os desafios expirados.
 
 Na área do responsável, abra **Gerenciar tarefas** e cadastre uma tarefa atribuída à criança. Escolha a recorrência, os dias, os pontos e os horários de semana e fim de semana. No perfil da criança, **Ver minhas missões** mostra as ocorrências abertas ordenadas pelo prazo, com filtros de periodicidade. O mesmo agendador prepara as ocorrências em segundo plano. A lista também prepara as missões elegíveis ao abrir.
 
 Em **Tarefas cadastradas**, use **Editar** para atualizar a configuração ou **Excluir** para parar de gerar novas missões. A exclusão é lógica. As missões já abertas preservam as condições originais.
+
+Em **Ver minhas missões**, a criança abre uma missão, confirma a conclusão e pode enviar comentário e foto conforme a configuração. Em **Revisar missões**, o responsável aprova, pede ajuste ou reabre uma missão vencida. A aprovação credita pontos no perfil da criança.
+
+Cada perfil pode habilitar os avisos do WhatsApp no painel. Use uma `APP_URL` acessível a quem vai abrir os links das mensagens. O volume `evidence_data` guarda as fotos privadas no Compose. O serviço `scheduler` faz novas tentativas de aviso e limpa fotos revisadas há 90 dias. No Easypanel, configure o processo `php artisan schedule:work` com acesso ao mesmo banco e volume privado da aplicação.
 
 ### Build e testes fora do Docker
 

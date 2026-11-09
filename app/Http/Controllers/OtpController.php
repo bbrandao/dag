@@ -59,7 +59,12 @@ final class OtpController
         $request->session()->forget('otp_challenge');
         $request->session()->put('account_version', $user->session_version);
 
-        return redirect()->route('dashboard');
+        $intended = $request->session()->pull('url.intended');
+        $path = is_string($intended) ? parse_url($intended, PHP_URL_PATH) : null;
+
+        return is_string($path) && preg_match('~^/(?:app/missoes|guardian/revisoes)/[0-9a-f-]{36}$~D', $path)
+            ? redirect($path)
+            : redirect()->route('dashboard');
     }
 
     public function reset(Request $request): RedirectResponse

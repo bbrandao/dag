@@ -6,10 +6,13 @@ interface DashboardProps {
     role: 'guardian' | 'child';
     family: string;
     children: { id: string; name: string }[];
+    whatsappNotices: boolean;
+    earnedPoints: number;
 }
 
-export default function Dashboard({ name, role, family, children }: DashboardProps) {
+export default function Dashboard({ name, role, family, children, whatsappNotices, earnedPoints }: DashboardProps) {
     const form = useForm({ name: '', birth_date: '', phone: '+55', authorized: false });
+    const notices = useForm({ enabled: whatsappNotices });
     const isGuardian = role === 'guardian';
 
     function registerChild(event: FormEvent<HTMLFormElement>) {
@@ -28,9 +31,25 @@ export default function Dashboard({ name, role, family, children }: DashboardPro
                 <p className="tag">{isGuardian ? 'Responsável' : 'Meu espaço'}</p>
                 <h1>Olá, {name}!</h1>
                 <p>{isGuardian ? family : 'Você entrou no seu perfil.'}</p>
-                <Link className="button" href={isGuardian ? '/guardian/tasks' : '/app/missoes'}>
-                    {isGuardian ? 'Gerenciar tarefas' : 'Ver minhas missões'}
-                </Link>
+                {!isGuardian && <p className="tag reward">{earnedPoints} pontos conquistados</p>}
+                <div className="filters">
+                    <Link className="button" href={isGuardian ? '/guardian/tasks' : '/app/missoes'}>
+                        {isGuardian ? 'Gerenciar tarefas' : 'Ver minhas missões'}
+                    </Link>
+                    {isGuardian && <Link className="button secondary" href="/guardian/revisoes">Revisar missões</Link>}
+                </div>
+            </section>
+            <section className="card">
+                <h2>Avisos</h2>
+                <form onSubmit={event => { event.preventDefault(); notices.patch('/app/avisos'); }}>
+                    <label className="check">
+                        <input type="checkbox" checked={notices.data.enabled}
+                            onChange={event => notices.setData('enabled', event.target.checked)} />
+                        {isGuardian ? 'Avisar pelo WhatsApp quando houver uma entrega' : 'Receber o resultado da revisão pelo WhatsApp'}
+                    </label>
+                    <button type="submit" disabled={notices.processing || notices.data.enabled === whatsappNotices}>Salvar preferência</button>
+                    {notices.recentlySuccessful && <p role="status">Preferência salva.</p>}
+                </form>
             </section>
             {isGuardian && (
                 <section className="card" aria-labelledby="children-title">

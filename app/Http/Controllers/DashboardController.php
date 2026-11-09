@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -31,6 +32,18 @@ final class DashboardController
             'role' => $user->role,
             'family' => $user->family->name,
             'children' => $children,
+            'whatsappNotices' => (bool) $user->whatsapp_notices,
+            'earnedPoints' => $user->role === User::CHILD ? (int) DB::table('point_credits')
+                ->join('task_occurrences', 'task_occurrences.id', '=', 'point_credits.occurrence_id')
+                ->where('task_occurrences.child_id', $user->id)->sum('point_credits.points') : 0,
         ]);
+    }
+
+    public function updateNotices(Request $request): RedirectResponse
+    {
+        $request->validate(['enabled' => ['required', 'boolean']]);
+        $request->user()->forceFill(['whatsapp_notices' => $request->boolean('enabled')])->save();
+
+        return redirect()->route('dashboard');
     }
 }
