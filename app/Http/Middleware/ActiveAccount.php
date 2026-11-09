@@ -13,11 +13,16 @@ class ActiveAccount
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
+        $session = $request->session();
 
-        if (! $user->active || $request->session()->get('account_version') !== $user->session_version) {
+        if ($user->active && Auth::guard('web')->viaRemember() && ! $session->has('account_version')) {
+            $session->put('account_version', $user->session_version);
+        }
+
+        if (! $user->active || $session->get('account_version') !== $user->session_version) {
             Auth::logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
+            $session->invalidate();
+            $session->regenerateToken();
             Inertia::clearHistory();
 
             return redirect()->route('login');

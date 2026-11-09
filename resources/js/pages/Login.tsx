@@ -2,7 +2,7 @@ import { Head, router, useForm } from '@inertiajs/react';
 import { useEffect, useRef, type FormEvent } from 'react';
 
 export default function Login({ awaitingCode }: { awaitingCode: boolean }) {
-    const request = useForm({ phone: '+55', permission: false });
+    const request = useForm({ phone: '+55', remember: false });
     const verification = useForm({ code: '' });
     const codeInput = useRef<HTMLInputElement>(null);
 
@@ -53,12 +53,12 @@ export default function Login({ awaitingCode }: { awaitingCode: boolean }) {
                             onChange={event => request.setData('phone', event.target.value)} />
                         <p id="phone-error" className="error" role="alert">{request.errors.phone}</p>
                         <label className="check">
-                            <input type="checkbox" required checked={request.data.permission}
-                                onChange={event => request.setData('permission', event.target.checked)} />
-                            Quero receber meu código de acesso pelo WhatsApp.
+                            <input type="checkbox" checked={request.data.remember} aria-describedby="remember-hint"
+                                onChange={event => request.setData('remember', event.target.checked)} />
+                            Permanecer conectado
                         </label>
-                        <p className="error" role="alert">{request.errors.permission}</p>
-                        <button disabled={request.processing} type="submit">Receber código</button>
+                        <p id="remember-hint">Por até 30 dias neste dispositivo.</p>
+                        <button disabled={request.processing} type="submit">Enviar código pelo WhatsApp</button>
                     </form>
                 )}
             </section>

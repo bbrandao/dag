@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\Phone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -45,10 +46,11 @@ final class FamilyLoginTest extends TestCase
     public function test_guardian_registers_child_and_child_signs_in_with_own_code(): void
     {
         $guardian = $this->guardian();
-        $this->post('/auth/otp', ['phone' => self::GUARDIAN_PHONE, 'permission' => true])->assertRedirect('/login');
+        $this->post('/auth/otp', ['phone' => self::GUARDIAN_PHONE])->assertRedirect('/login');
         $code = $this->sentCode(self::GUARDIAN_PHONE);
         $this->assertDatabaseMissing('otp_challenges', ['digest' => $code]);
-        $this->post('/auth/otp/verify', ['code' => $code])->assertRedirect('/app');
+        $this->post('/auth/otp/verify', ['code' => $code])->assertRedirect('/app')
+            ->assertCookieMissing(Auth::guard('web')->getRecallerName());
         $this->assertAuthenticatedAs($guardian);
 
         $this->post('/guardian/children', $this->childData())->assertRedirect('/app')->assertSessionHasNoErrors();
@@ -74,6 +76,52 @@ final class FamilyLoginTest extends TestCase
         Http::assertNothingSent();
         $this->post('/auth/otp/verify', ['code' => '123456'])->assertSessionHasErrors('code');
         $this->assertGuest();
+    }
+
+    public function test_remember_cookie_restores_the_session_until_logout(): void
+    {
+        $guardian = $this->guardian();
+        $name = Auth::guard('web')->getRecallerName();
+        $cookie = $this->rememberedCookie($name);
+
+        $this->forgetSession();
+        $this->withUnencryptedCookie($name, $cookie)->get('/app')->assertOk()
+            ->assertSessionHas('account_version', $guardian->session_version);
+        $this->assertAuthenticatedAs($guardian);
+
+        $this->post('/logout')->assertRedirect('/login')->assertCookieExpired($name);
+        $this->forgetSession();
+        $this->get('/app')->assertRedirect('/login');
+    }
+
+    public function test_remember_cookie_cannot_restore_a_revoked_session(): void
+    {
+        $guardian = $this->guardian();
+        $name = Auth::guard('web')->getRecallerName();
+        $cookie = $this->rememberedCookie($name);
+
+        $guardian->forceFill(['session_version' => 2])->save();
+        $this->forgetSession();
+        $this->withUnencryptedCookie($name, $cookie)->get('/app')->assertRedirect('/login');
+        $this->assertGuest();
+    }
+
+    private function rememberedCookie(string $name): string
+    {
+        $this->post('/auth/otp', ['phone' => self::GUARDIAN_PHONE, 'remember' => true])->assertRedirect('/login');
+        $response = $this->post('/auth/otp/verify', ['code' => $this->sentCode(self::GUARDIAN_PHONE)])
+            ->assertRedirect('/app')->assertCookie($name);
+        $cookie = $response->getCookie($name, decrypt: false);
+        $this->assertTrue($cookie->isHttpOnly());
+        $this->assertEqualsWithDelta(time() + 30 * 86400, $cookie->getExpiresTime(), 5);
+
+        return $cookie->getValue();
+    }
+
+    private function forgetSession(): void
+    {
+        $this->app['session']->driver()->flush();
+        $this->app['auth']->forgetGuards();
     }
 
     public function test_code_can_be_used_only_once_and_session_revocation_takes_effect(): void

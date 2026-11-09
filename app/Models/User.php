@@ -18,7 +18,15 @@ class User extends Authenticatable
 
     protected $fillable = ['family_id', 'name', 'role', 'relationship', 'phone', 'phone_hash'];
 
-    protected $hidden = ['phone', 'phone_hash'];
+    protected $hidden = ['phone', 'phone_hash', 'remember_token'];
+
+    public function getAuthPassword(): ?string
+    {
+        // The session guard also uses this fingerprint to validate remember cookies.
+        $token = $this->getRememberToken();
+
+        return $token ? hash_hmac('sha256', (string) $this->session_version, $token) : null;
+    }
 
     protected function casts(): array
     {

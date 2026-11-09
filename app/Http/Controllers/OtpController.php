@@ -25,14 +25,16 @@ final class OtpController
     {
         $data = $request->validate([
             'phone' => ['required', 'string', Phone::RULE],
-            'permission' => ['accepted'],
+            'remember' => ['sometimes', 'boolean'],
         ], [
             'phone.required' => 'Informe seu WhatsApp.',
             'phone.regex' => 'Informe o WhatsApp com DDI, como +5571999999999.',
-            'permission.accepted' => 'Autorize o envio do código pelo WhatsApp para continuar.',
         ]);
 
-        $request->session()->put('otp_challenge', $otp->issue($data['phone']));
+        $request->session()->put([
+            'otp_challenge' => $otp->issue($data['phone']),
+            'otp_remember' => (bool) ($data['remember'] ?? false),
+        ]);
 
         return redirect()->route('login');
     }
@@ -50,7 +52,9 @@ final class OtpController
             return redirect()->route('login')->withErrors(['code' => 'Código inválido ou expirado. Confira o código ou solicite outro.']);
         }
 
-        Auth::login($user);
+        $guard = Auth::guard('web');
+        $guard->setRememberDuration(30 * 24 * 60);
+        $guard->login($user, $request->session()->pull('otp_remember', false));
         $request->session()->regenerate();
         $request->session()->forget('otp_challenge');
         $request->session()->put('account_version', $user->session_version);
@@ -60,7 +64,7 @@ final class OtpController
 
     public function reset(Request $request): RedirectResponse
     {
-        $request->session()->forget('otp_challenge');
+        $request->session()->forget(['otp_challenge', 'otp_remember']);
 
         return redirect()->route('login');
     }
