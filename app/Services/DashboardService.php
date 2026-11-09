@@ -29,6 +29,7 @@ final class DashboardService
         $now = now($family->timezone);
         $month = $now->copy()->startOfMonth()->utc();
         $rate = $isGuardian ? $this->accounts->currentRate($family->id, $now->copy()->utc())?->cents_per_point : null;
+        $childMissions = $isGuardian ? null : $this->tasks->dashboardMissions($user);
 
         return [
             'name' => $user->name,
@@ -40,7 +41,7 @@ final class DashboardService
             'rateCents' => $rate === null ? null : (int) $rate,
             'progress' => $this->progress($user, $profiles, $month, $now->utc()),
             'earnedPoints' => $user->role === User::CHILD ? $this->accounts->earnedPoints($user) : 0,
-            'childMissions' => $isGuardian ? null : $this->tasks->dashboardMissions($user),
+            'childMissions' => $childMissions,
         ];
     }
 

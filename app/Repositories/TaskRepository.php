@@ -82,11 +82,14 @@ final class TaskRepository
 
     public function dashboardMissions(User $child, DateTimeInterface $now): Collection
     {
-        $missions = $this->openedMissions($child, $now)->whereIn('status', ['pending', 'adjustment']);
-        $open = (clone $missions)->where('due_at', '>', $now)->orderBy('due_at')->orderBy('id')->limit(5)->get();
-        $expired = $missions->where('due_at', '<=', $now)->orderByDesc('due_at')->orderBy('id')->limit(5)->get();
+        $missions = $this->openedMissions($child, $now);
+        $actionable = (clone $missions)->whereIn('status', ['pending', 'adjustment']);
+        $open = (clone $actionable)->where('due_at', '>', $now)->orderBy('due_at')->orderBy('id')->limit(5)->get();
+        $expired = $actionable->where('due_at', '<=', $now)->orderByDesc('due_at')->orderBy('id')->limit(5)->get();
+        $reviewed = $missions->whereIn('status', ['in_review', 'approved', 'rejected'])
+            ->orderByDesc('due_at')->orderBy('id')->limit(5)->get();
 
-        return $open->concat($expired);
+        return $open->concat($expired)->concat($reviewed);
     }
 
     private function openedMissions(User $child, DateTimeInterface $now): Builder

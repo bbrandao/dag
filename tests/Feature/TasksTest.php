@@ -67,6 +67,25 @@ final class TasksTest extends TestCase
             ->has('missions', 1)->where('missions.0.title', 'Semanal'));
     }
 
+    public function test_dashboard_shows_a_same_day_mission_registered_after_its_deadline(): void
+    {
+        [$guardian, $child] = $this->family();
+        $this->as($guardian)->post('/guardian/tasks', $this->task($child, [
+            'title' => 'Arruma a cama', 'weekday_time' => '07:30',
+        ]))->assertRedirect('/guardian/tasks');
+        $this->post('/guardian/tasks', $this->task($child, [
+            'title' => 'Prazo anterior ao início', 'frequency' => 'monthly', 'month_day' => 5,
+        ]))->assertRedirect('/guardian/tasks');
+
+        $this->as($child)->get('/app')->assertInertia(fn (Assert $page) => $page
+            ->has('childMissions.missions', 1)->where('progress.0.expired', 1)
+            ->where('childMissions.missions.0.title', 'Arruma a cama')
+            ->where('childMissions.missions.0.status', 'expired'));
+        $this->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.status', 'expired'));
+        $this->assertDatabaseCount('task_occurrences', 1);
+    }
+
     public function test_annual_leap_day_uses_february_28_in_a_common_year(): void
     {
         [$guardian, $child] = $this->family();

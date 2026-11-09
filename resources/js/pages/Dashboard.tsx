@@ -59,8 +59,11 @@ export default function Dashboard({ name, role, family, children, whatsappNotice
                 </div>
             </section>
             {childMissions && [
-                { title: 'Missões a fazer', missions: childMissions.missions.filter(mission => mission.status !== 'expired') },
+                { title: 'Missões a fazer', missions: childMissions.missions.filter(mission => mission.status === 'pending' || mission.status === 'adjustment') },
+                { title: 'Em revisão', missions: childMissions.missions.filter(mission => mission.status === 'in_review') },
                 { title: 'Missões vencidas', missions: childMissions.missions.filter(mission => mission.status === 'expired') },
+                { title: 'Missões concluídas', missions: childMissions.missions.filter(mission => mission.status === 'approved') },
+                { title: 'Missões reprovadas', missions: childMissions.missions.filter(mission => mission.status === 'rejected') },
             ].filter(group => group.missions.length > 0).map(group => (
                 <section key={group.title} aria-label={group.title}>
                     <h2>{group.title}</h2>

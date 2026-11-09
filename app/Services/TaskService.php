@@ -108,6 +108,7 @@ final class TaskService
     public function dashboardMissions(User $child): array
     {
         abort_unless($child->role === User::CHILD, 403);
+        $this->calendar->materialize($child->family, $child->id);
         $now = now();
         $timezone = $child->family->timezone;
 

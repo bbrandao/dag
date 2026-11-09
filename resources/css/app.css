@@ -19,10 +19,17 @@ h1 { font-size: clamp(1.8rem, 6vw, 2.5rem); }
 .topbar .brand { margin: 0; }
 .card { background: #fff; border: 1px solid #e4d8ef; border-radius: 1.4rem; padding: clamp(1rem, 5vw, 2rem); margin-bottom: 1rem; }
 .card > :last-child { margin-bottom: 0; }
-.card.mission-expired { background: #fff3ef; border-color: #d98e7f; }
-.tag.tag-expired { background: #f9d5cc; color: #78271e; }
 .tag { display: inline-block; border-radius: 2rem; background: #bfefd5; padding: .25rem .7rem; font-weight: 700; }
 .reward { background: #ffd45c; }
+.mission-card { background: var(--mission-surface); border-inline-start: .35rem solid var(--mission-accent); }
+.mission-card-labels { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .75rem; }
+.mission-status { display: inline-flex; align-items: center; gap: .35rem; background: var(--mission-badge); color: var(--mission-ink); }
+.status-pending { --mission-surface: #faf6ff; --mission-accent: #6c46cd; --mission-badge: #e9ddff; --mission-ink: #462593; }
+.status-adjustment { --mission-surface: #fff8e6; --mission-accent: #a26908; --mission-badge: #ffe4a5; --mission-ink: #694305; }
+.status-in_review { --mission-surface: #f0f7ff; --mission-accent: #3470a6; --mission-badge: #d9ebff; --mission-ink: #164875; }
+.status-approved { --mission-surface: #eefaf1; --mission-accent: #348250; --mission-badge: #ccf1d7; --mission-ink: #1b5632; }
+.status-rejected { --mission-surface: #fcf3f7; --mission-accent: #a34a70; --mission-badge: #f7dfeb; --mission-ink: #712a4d; }
+.status-expired { --mission-surface: #fff3ef; --mission-accent: #c16a57; --mission-badge: #f9d5cc; --mission-ink: #78271e; }
 form { display: grid; gap: .45rem; }
 label { font-weight: 650; }
 input, button, textarea, select { font: inherit; min-width: 0; }

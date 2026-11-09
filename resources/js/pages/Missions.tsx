@@ -16,7 +16,9 @@ export default function Missions({ missions, frequency, today }: {
         { title: 'Hoje', missions: open.filter(mission => mission.due_on === today) },
         { title: 'Próximas', missions: open.filter(mission => mission.due_on !== today) },
         { title: 'Vencidas', missions: missions.filter(mission => mission.status === 'expired').reverse() },
-        { title: 'Entregas e retornos', missions: missions.filter(mission => ['in_review', 'approved', 'rejected'].includes(mission.status)) },
+        { title: 'Em revisão', missions: missions.filter(mission => mission.status === 'in_review') },
+        { title: 'Concluídas', missions: missions.filter(mission => mission.status === 'approved').reverse() },
+        { title: 'Reprovadas', missions: missions.filter(mission => mission.status === 'rejected').reverse() },
     ];
 
     return (

@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { formatDate, type MissionStatus, missionStatuses } from '../tasks';
+import { MissionStatusBadge } from '../MissionCard';
 
 interface MissionDetails {
     id: string;
@@ -143,8 +144,9 @@ export default function Mission({ mission, attempts, reopening, requestId, isGua
                 <h1>{mission.title}</h1>
                 <Link className="button secondary" href={isGuardian ? '/guardian/revisoes' : '/app/missoes'}>Voltar</Link>
             </header>
-            <section className={mission.status === 'expired' ? 'card mission-expired' : 'card'}>
-                <p className={mission.status === 'expired' ? 'tag tag-expired' : 'tag'}>{missionStatuses[mission.status]} · {mission.points} pontos</p>
+            <section className={`card mission-card status-${mission.status}`}>
+                <div className="mission-card-labels"><MissionStatusBadge status={mission.status} /></div>
+                <p>{mission.points} pontos</p>
                 <p>Prazo {mission.due}</p>
                 <p className="criteria">{mission.criteria}</p>
                 {reopening && <p>Reaberta. Data original {formatDate(mission.original_date)}. {reopening}</p>}

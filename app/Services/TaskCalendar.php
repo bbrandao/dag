@@ -56,7 +56,7 @@ final class TaskCalendar
         $time = $day->dayOfWeekIso >= 6 ? $task->weekend_time : $task->weekday_time;
         $dueAt = $day->setTimeFromTimeString($time);
 
-        if ($opensAt->gt($now) || $dueAt->lte($now)) {
+        if ($opensAt->gt($now) || $day->lt($opensAt->startOfDay())) {
             return;
         }
 
