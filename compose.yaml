@@ -1,0 +1,29 @@
+services:
+  app:
+    build: .
+    image: dag:local
+    env_file: .env
+    ports:
+      - "127.0.0.1:8000:80"
+    depends_on:
+      database:
+        condition: service_healthy
+
+  database:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-dag}
+      POSTGRES_USER: ${DB_USERNAME:-dag}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD no .env}
+    ports:
+      - "127.0.0.1:${DB_FORWARD_PORT:-5433}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_data:
