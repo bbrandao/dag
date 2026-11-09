@@ -1,0 +1,24 @@
+services:
+  app:
+    extends:
+      file: compose.production.yaml
+      service: app
+    networks:
+      default:
+      postgres_private:
+
+  scheduler:
+    extends:
+      file: compose.production.yaml
+      service: scheduler
+    networks:
+      default:
+      postgres_private:
+
+volumes:
+  evidence_data:
+
+networks:
+  postgres_private:
+    external: true
+    name: ${DAG_POSTGRES_NETWORK:?Defina DAG_POSTGRES_NETWORK no EasyPanel}

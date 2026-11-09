@@ -5,7 +5,7 @@ O [Compose de produção](../compose.production.yaml) sobe o app HTTP e o agenda
 ## 1. Prepare o banco e o domínio
 
 - Crie um banco PostgreSQL dedicado e um usuário da aplicação com permissão para criar tabelas no schema usado pelas migrations. Use um endpoint direto, acessível a partir dos containers da VPS.
-- Se o PostgreSQL for um serviço separado do mesmo projeto EasyPanel, consulte **Credentials** e use o host e a porta internos quando acessíveis pelo Compose. Se o host não resolver, verifique as redes Docker dos dois serviços antes de configurar o domínio. [Postgres no EasyPanel](https://easypanel.io/docs/services/postgres)
+- Se o PostgreSQL for um serviço separado do EasyPanel, consulte **Credentials** e use o host e a porta internos. Use a variante de Compose descrita abaixo para colocar o app e o agendador na rede privada do PostgreSQL. [Postgres no EasyPanel](https://easypanel.io/docs/services/postgres)
 - Se o PostgreSQL estiver em outro servidor, autorize a conexão da VPS no firewall ou na rede privada do provedor. Use a URI fornecida em `DB_URL` quando precisar de parâmetros de TLS, como `sslmode=require`. A URI deve usar credenciais codificadas para URL.
 - Crie um registro DNS **A** para o subdomínio do DAG apontando para o IPv4 da VPS. [DNS na Hostinger](https://www.hostinger.com/support/1583227-how-to-point-a-domain-to-your-vps-at-hostinger/)
 
@@ -20,7 +20,11 @@ No projeto do EasyPanel, selecione **New Service → Compose → Git** e preench
 | Build Path | `/` |
 | Docker Compose File | `compose.production.yaml` |
 
+Para usar o host interno de um PostgreSQL separado no EasyPanel, selecione `compose.easypanel.yaml` no campo **Docker Compose File**. Essa variante conecta o app e o agendador à rede existente do banco e à rede padrão do Compose. No SSH da VPS, consulte `docker ps --format 'table {{.Names}}\t{{.Networks}}'` para identificar a rede privada do container PostgreSQL. Uma rede overlay precisa aceitar a conexão de containers independentes. [Redes externas no Compose](https://docs.docker.com/reference/compose-file/networks/#external)
+
 Em **Environment**, habilite **Create .env file** e cole o [modelo de produção](../.env.production.example). Preencha `APP_URL` com o domínio HTTPS, a conexão do PostgreSQL e as credenciais da instância Uazapi. Em `WHATSAPP_SENDER_NUMBER`, informe o número pareado no formato internacional, com `+` e DDI.
+
+Se escolheu `compose.easypanel.yaml`, preencha também `DAG_POSTGRES_NETWORK` com o nome exato da rede privada identificada na VPS.
 
 Para uma instalação nova, gere uma chave Laravel com `openssl rand -base64 32` e prefixe o resultado com `base64:` em `APP_KEY`. Gere `DAG_PHONE_KEY` e `DAG_OTP_KEY` com duas execuções separadas de `openssl rand -hex 32`. Guarde os valores no painel. Se estiver restaurando dados de outra instalação, preserve as chaves de origem e restaure também o volume de fotos.
 
