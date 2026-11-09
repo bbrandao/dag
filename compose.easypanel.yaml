@@ -21,4 +21,4 @@ volumes:
 networks:
   postgres_private:
     external: true
-    name: ${DAG_POSTGRES_NETWORK:?Defina DAG_POSTGRES_NETWORK no EasyPanel}
+    name: ${DAG_POSTGRES_NETWORK:-easypanel-promovilas-prod}
