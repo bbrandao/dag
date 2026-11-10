@@ -53,27 +53,27 @@ final class MissionNotices
             $baseUrl = config('dag.public_url') ?: config('app.url');
             $url = rtrim($baseUrl, '/').route($route, $mission->id, false);
             $title = str_replace(["\r", "\n"], ' ', $mission->title);
+            [$icon, $heading] = match ($notice->kind) {
+                'submitted' => ['📝', 'Tarefa para REVISÃO!'],
+                'approved' => ['✅', 'Missão APROVADA!'],
+                'rejected' => ['🚫', 'Missão REPROVADA!'],
+                'adjustment' => ['📝', 'Missão precisa de AJUSTE!'],
+            };
+            $message = "*DAG: {$icon}*\n*{$heading}*\n\n> {$title}";
+            $comment = $submitted ? $mission->comment : $mission->feedback;
+            if ($comment !== null && $comment !== '') {
+                $message .= "\n_{$comment}_";
+            }
+
+            $image = null;
             if ($submitted) {
                 $timezone = $recipient->family->timezone;
                 $deadline = $this->localTime($mission->due_at, $timezone);
                 $submittedAt = $this->localTime($mission->submitted_at, $timezone);
-                $message = "*DAG: Tarefa para revisão 📝*\n\n> {$title}\n\n🕒 Prazo: {$deadline}\n✅ Concluída em: {$submittedAt}";
-                $comment = $mission->comment;
+                $message .= "\n\n🕒 Prazo: {$deadline}\n✅ Concluída em: {$submittedAt}";
                 $image = $mission->photo_path ? Storage::disk('local')->get($mission->photo_path) : null;
-            } else {
-                $heading = match ($notice->kind) {
-                    'approved' => 'Missão APROVADA! ✅',
-                    'rejected' => 'Missão REPROVADA! 🚫',
-                    'adjustment' => 'Missão precisa de AJUSTE! 📝',
-                };
-                $message = "*DAG: {$heading}*\n\n> {$title}";
-                $comment = $mission->feedback;
-                $image = null;
             }
 
-            if ($comment !== null && $comment !== '') {
-                $message .= "\n\n_{$comment}_";
-            }
             $status = $this->gateway->sendLinkButton(
                 $recipient->phone, $message, $submitted ? 'Revisar' : 'Ver no DAG', $url, $image,
             );

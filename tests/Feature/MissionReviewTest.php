@@ -74,8 +74,8 @@ final class MissionReviewTest extends TestCase
         $this->assertDatabaseMissing('mission_notices', ['recipient_id' => $child->id]);
         $this->get('/app')->assertInertia(fn (Assert $page) => $page
             ->where('childMissions.missions.0.status', 'in_review'));
-        $caption = "*DAG: Tarefa para revisão 📝*\n\n> Arrumar a cama\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00\n\n_"
-            .$payload['comment'].'_';
+        $caption = "*DAG: 📝*\n*Tarefa para REVISÃO!*\n\n> Arrumar a cama\n_"
+            .$payload['comment']."_\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00";
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/menu'
             && $request['number'] === '5571999991111' && $request['type'] === 'button' && $request['text'] === $caption
             && $request['choices'] === ["Revisar|url:https://dag.example{$review}"]
@@ -105,7 +105,7 @@ final class MissionReviewTest extends TestCase
         $this->assertCount(2, $messages);
         $this->assertSame(["Revisar|url:https://dag.example{$review}"], $messages[0][0]['choices']);
         $this->assertSame(["Ver no DAG|url:https://dag.example{$url}"], $messages[1][0]['choices']);
-        $this->assertStringContainsString('Muito bem!', $messages[1][0]['text']);
+        $this->assertSame("*DAG: ✅*\n*Missão APROVADA!*\n\n> Arrumar a cama\n_Muito bem!_", $messages[1][0]['text']);
 
         $this->as($child)->get($url)->assertInertia(fn (Assert $page) => $page
             ->component('Mission')->where('mission.status', 'approved')->where('attempts.0.feedback', 'Muito bem!'));
@@ -131,7 +131,7 @@ final class MissionReviewTest extends TestCase
             ->assertRedirect($url)->assertSessionHasNoErrors();
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text'
             && $request['number'] === '5571999991111'
-            && $request['text'] === "*DAG: Tarefa para revisão 📝*\n\n> Arrumar a cama\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00\n\n_Terminei._\n\nRevisar: https://dag.example{$review}");
+            && $request['text'] === "*DAG: 📝*\n*Tarefa para REVISÃO!*\n\n> Arrumar a cama\n_Terminei._\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00\n\nRevisar: https://dag.example{$review}");
 
         $submission = DB::table('mission_submissions')->value('id');
         $this->as($guardian)->post($review, ['submission_id' => $submission, 'decision' => 'rejected', 'feedback' => 'Faltou a coberta.'])
@@ -139,7 +139,7 @@ final class MissionReviewTest extends TestCase
         $this->assertDatabaseCount('point_credits', 0);
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text'
             && $request['number'] === '5571999992222'
-            && $request['text'] === "*DAG: Missão REPROVADA! 🚫*\n\n> Arrumar a cama\n\n_Faltou a coberta._\n\nVer no DAG: https://dag.example{$url}");
+            && $request['text'] === "*DAG: 🚫*\n*Missão REPROVADA!*\n\n> Arrumar a cama\n_Faltou a coberta._\n\nVer no DAG: https://dag.example{$url}");
         $this->as($child)->get($url)->assertInertia(fn (Assert $page) => $page
             ->where('mission.status', 'rejected')->where('attempts.0.decision', 'rejected'));
         $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->where('events.0.message', 'Missão reprovada'));
@@ -162,7 +162,8 @@ final class MissionReviewTest extends TestCase
         $this->assertDatabaseHas('mission_notices', ['kind' => 'submitted', 'status' => 'sent', 'attempts' => 2]);
         $this->assertDatabaseHas('task_occurrences', ['id' => $mission, 'status' => 'in_review']);
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/menu'
-            && $request['number'] === '5571999991111');
+            && $request['number'] === '5571999991111'
+            && $request['text'] === "*DAG: 📝*\n*Tarefa para REVISÃO!*\n\n> Arrumar a cama\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00");
     }
 
     public function test_guardian_can_filter_by_day_and_correct_a_review_until_allowance_closes(): void
