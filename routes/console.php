@@ -7,6 +7,7 @@ use App\Repositories\OtpRepository;
 use App\Services\AllowanceLedger;
 use App\Services\EvidencePhoto;
 use App\Services\MissionNotices;
+use App\Services\MissionPush;
 use App\Services\TaskCalendar;
 use Illuminate\Support\Facades\Schedule;
 
@@ -22,6 +23,9 @@ Schedule::call(function (): void {
 
 Schedule::call(fn () => app(MissionNotices::class)->deliver())
     ->name('dag:deliver-mission-notices')->everyMinute()->withoutOverlapping();
+
+Schedule::call(fn () => app(MissionPush::class)->tick())
+    ->name('dag:deliver-web-push')->everyMinute()->withoutOverlapping(2);
 
 Schedule::call(fn () => app(EvidencePhoto::class)->prune())
     ->name('dag:prune-reviewed-mission-photos')->daily()->withoutOverlapping();

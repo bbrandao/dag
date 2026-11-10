@@ -23,6 +23,7 @@ final class MissionService
         private readonly MissionNotices $notices,
         private readonly AllowanceLedger $ledger,
         private readonly InboxRepository $inbox,
+        private readonly MissionPush $push,
     ) {}
 
     public function requireSubmissionAccess(User $child, string $mission): void
@@ -68,6 +69,7 @@ final class MissionService
                 ]);
                 $this->missions->updateOccurrence($mission, ['status' => 'in_review']);
                 $this->notices->queue($occurrence, $id, 'submitted');
+                $this->push->queueReview($occurrence, $id);
 
                 return $id;
             });
@@ -80,6 +82,7 @@ final class MissionService
         }
 
         defer(fn () => $this->notices->deliver($submissionId, 'submitted'))->always();
+        defer(fn () => $this->push->deliver($submissionId))->always();
     }
 
     public function review(User $guardian, string $mission, array $data): void

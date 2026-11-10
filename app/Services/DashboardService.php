@@ -16,6 +16,7 @@ final class DashboardService
         private readonly AllowanceRepository $accounts,
         private readonly DashboardRepository $dashboard,
         private readonly TaskService $tasks,
+        private readonly PushTransport $push,
     ) {}
 
     public function data(User $user): array
@@ -42,6 +43,7 @@ final class DashboardService
             'progress' => $this->progress($user, $profiles, $month, $now->utc(), $childMissions['today'] ?? null),
             'earnedPoints' => $user->role === User::CHILD ? $this->accounts->earnedPoints($user) : 0,
             'childMissions' => $childMissions,
+            'pushPublicKey' => $this->push->configured() ? config('dag.web_push.publicKey') : null,
         ];
     }
 

@@ -50,3 +50,9 @@ Em **Domains**, adicione o domínio de `APP_URL`, caminho `/`, serviço `app`, p
 2. Faça login pelo WhatsApp com o perfil provisionado e confira os logs de `app` e `scheduler`.
 3. Envie uma tarefa com foto e confira o aviso e o link no WhatsApp. Teste a instalação da PWA no celular.
 4. Inclua o banco externo e o volume `evidence_data` nos backups. Em versões com novas migrations, faça backup e rode `php artisan migrate --force` no container `app` durante a janela de publicação.
+
+## 5. Ative as notificações Web Push
+
+Após aplicar as migrations, rode `php artisan dag:push-keys` no container `app`. Copie as duas linhas geradas para **Environment** no EasyPanel e configure `DAG_PUSH_SUBJECT` com um contato de operação, como `mailto:admin@seudominio.com.br`. Preserve o mesmo par de chaves em deploys posteriores. Salve e implante para que o app e o agendador recebam a configuração.
+
+Cada perfil deve abrir o DAG no celular e tocar em **Notificações do celular → Ativar neste aparelho**. No iPhone, abra o ícone instalado na tela inicial e aceite o aviso do sistema. Os lembretes são processados pelo agendador a cada minuto. Para testar, use uma tarefa com prazo a mais de 15 minutos e conclua outra tarefa para verificar a notificação do responsável. [Web Push no iPhone](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)

@@ -6,6 +6,7 @@ use App\Http\Controllers\InboxController;
 use App\Http\Controllers\MissionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\OtpController;
+use App\Http\Controllers\PushController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
 
@@ -41,6 +42,11 @@ Route::middleware(['auth', 'active.account'])->group(function (): void {
     Route::get('/app/avisos', [InboxController::class, 'show'])->name('inbox');
     Route::get('/app/avisos/contagem', [InboxController::class, 'count']);
     Route::patch('/app/avisos/lidos', [InboxController::class, 'read']);
+    Route::middleware('throttle:20,1')->prefix('/app/push')->group(function (): void {
+        Route::post('/status', [PushController::class, 'status'])->block();
+        Route::post('/assinatura', [PushController::class, 'store'])->block();
+        Route::delete('/assinatura', [PushController::class, 'destroy'])->block();
+    });
     Route::get('/app/ganhos', [AllowanceController::class, 'show'])->name('allowance.child');
     Route::get('/guardian/mesadas/{child}', [AllowanceController::class, 'show'])->whereUuid('child')->name('allowance.guardian');
     Route::post('/guardian/mesadas/{child}/conversao', [AllowanceController::class, 'rate'])->whereUuid('child');

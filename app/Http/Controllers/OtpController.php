@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\OtpService;
+use App\Repositories\PushRepository;
 use App\Support\Phone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -74,8 +75,12 @@ final class OtpController
         return redirect()->route('login');
     }
 
-    public function logout(Request $request): RedirectResponse
+    public function logout(Request $request, PushRepository $push): RedirectResponse
     {
+        $endpoint = $request->session()->get('push_endpoint_hash');
+        if (is_string($endpoint)) {
+            $push->unsubscribe($request->user()->id, $endpoint);
+        }
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

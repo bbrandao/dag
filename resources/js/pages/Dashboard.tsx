@@ -1,5 +1,6 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import ChildProfileForm from './ChildProfileForm';
+import PushPreferences from '../PushPreferences';
 import { MissionCard, type MissionSummary } from '../MissionCard';
 
 const reais = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -30,10 +31,11 @@ interface DashboardProps {
     monthLabel: string;
     rateCents: number | null;
     progress: Progress[];
+    pushPublicKey: string | null;
     childMissions: { missions: MissionSummary[]; today: string } | null;
 }
 
-export default function Dashboard({ name, role, family, children, whatsappNotices, earnedPoints, monthLabel, rateCents, progress, childMissions }: DashboardProps) {
+export default function Dashboard({ name, role, family, children, whatsappNotices, earnedPoints, monthLabel, rateCents, progress, childMissions, pushPublicKey }: DashboardProps) {
     const notices = useForm({ enabled: whatsappNotices });
     const isGuardian = role === 'guardian';
     const firstChild = children[0];
@@ -118,6 +120,7 @@ export default function Dashboard({ name, role, family, children, whatsappNotice
                     {notices.recentlySuccessful && <p role="status">Preferência salva.</p>}
                 </form>
             </section>
+            {pushPublicKey && <PushPreferences publicKey={pushPublicKey} guardian={isGuardian} />}
             {isGuardian && (
                 <section className="card" aria-labelledby="children-title">
                     <h2 id="children-title">Filhos vinculados</h2>
