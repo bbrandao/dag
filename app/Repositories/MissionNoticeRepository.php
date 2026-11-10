@@ -29,6 +29,12 @@ final class MissionNoticeRepository
         DB::table('mission_notices')->where('recipient_id', $recipient)->where('status', 'pending')->update(['status' => 'cancelled']);
     }
 
+    public function cancelPreviousReview(string $submission): void
+    {
+        DB::table('mission_notices')->where('submission_id', $submission)->where('kind', '!=', 'submitted')
+            ->where('status', 'pending')->update(['status' => 'cancelled']);
+    }
+
     public function markStaleAsUnknown(DateTimeInterface $cutoff): void
     {
         DB::table('mission_notices')->where('status', 'sending')->where('available_at', '<=', $cutoff)
@@ -67,6 +73,7 @@ final class MissionNoticeRepository
             ->where('submissions.id', $submission)->firstOrFail([
                 'missions.id', 'missions.family_id', 'missions.child_id', 'missions.title', 'missions.due_at',
                 'submissions.submitted_at', 'submissions.comment', 'submissions.photo_path', 'submissions.feedback',
+                'submissions.review_version',
             ]);
     }
 

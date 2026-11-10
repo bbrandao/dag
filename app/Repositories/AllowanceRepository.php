@@ -10,6 +10,17 @@ use Illuminate\Support\Facades\DB;
 
 final class AllowanceRepository
 {
+    public function creditIsSettled(string $occurrence): bool
+    {
+        return DB::table('point_credits as credits')->join('payout_items as items', 'items.credit_id', '=', 'credits.id')
+            ->where('credits.occurrence_id', $occurrence)->exists();
+    }
+
+    public function removeCredit(string $occurrence): void
+    {
+        DB::table('point_credits')->where('occurrence_id', $occurrence)->delete();
+    }
+
     public function currentRate(string $familyId, DateTimeInterface|string|null $at = null): ?object
     {
         return $this->rates($familyId)->when($at !== null, fn (Builder $query) => $query->where('effective_at', '<=', $at))->first();

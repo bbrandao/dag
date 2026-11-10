@@ -3,6 +3,8 @@ services:
     extends:
       file: compose.production.yaml
       service: app
+    environment:
+      DAG_PUBLIC_URL: ${DAG_PUBLIC_URL:-https://dag.eclud.com.br}
     networks:
       default:
       postgres_private:
@@ -11,6 +13,8 @@ services:
     extends:
       file: compose.production.yaml
       service: scheduler
+    environment:
+      DAG_PUBLIC_URL: ${DAG_PUBLIC_URL:-https://dag.eclud.com.br}
     networks:
       default:
       postgres_private:

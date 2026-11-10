@@ -39,15 +39,15 @@ final class DashboardService
             'whatsappNotices' => (bool) $user->whatsapp_notices,
             'monthLabel' => $now->locale('pt_BR')->isoFormat('MMMM [de] YYYY'),
             'rateCents' => $rate === null ? null : (int) $rate,
-            'progress' => $this->progress($user, $profiles, $month, $now->utc()),
+            'progress' => $this->progress($user, $profiles, $month, $now->utc(), $childMissions['today'] ?? null),
             'earnedPoints' => $user->role === User::CHILD ? $this->accounts->earnedPoints($user) : 0,
             'childMissions' => $childMissions,
         ];
     }
 
-    private function progress(User $user, Collection $profiles, DateTimeInterface $month, DateTimeInterface $now): Collection
+    private function progress(User $user, Collection $profiles, DateTimeInterface $month, DateTimeInterface $now, ?string $childToday): Collection
     {
-        [$missions, $payments] = $this->dashboard->totals($user, $profiles->pluck('id'), $month, $now);
+        [$missions, $payments] = $this->dashboard->totals($user, $profiles->pluck('id'), $month, $now, $childToday);
 
         return $profiles->map(function (object $child) use ($missions, $payments): array {
             $mission = $missions->get($child->id);

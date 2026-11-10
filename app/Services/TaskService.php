@@ -95,13 +95,14 @@ final class TaskService
         $family = $child->family;
         $this->calendar->materialize($family, $child->id);
         $now = now();
-        $missions = $this->tasks->childMissions($child, $frequency, $now)
+        $today = $now->copy()->setTimezone($family->timezone)->toDateString();
+        $missions = $this->tasks->childMissions($child, $frequency, $now, $today)
             ->map(fn (object $mission) => $this->displayMission($mission, $family->timezone, $now));
 
         return [
             'missions' => $missions,
             'frequency' => $frequency,
-            'today' => $now->copy()->setTimezone($family->timezone)->toDateString(),
+            'today' => $today,
         ];
     }
 
@@ -111,11 +112,12 @@ final class TaskService
         $this->calendar->materialize($child->family, $child->id);
         $now = now();
         $timezone = $child->family->timezone;
+        $today = $now->copy()->setTimezone($timezone)->toDateString();
 
         return [
-            'missions' => $this->tasks->dashboardMissions($child, $now)
+            'missions' => $this->tasks->dashboardMissions($child, $now, $today)
                 ->map(fn (object $mission) => $this->displayMission($mission, $timezone, $now)),
-            'today' => $now->copy()->setTimezone($timezone)->toDateString(),
+            'today' => $today,
         ];
     }
 

@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Models\User;
+use DateTimeInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -17,25 +18,47 @@ final class MissionRepository
             ->when($lock, fn (Builder $query) => $query->lockForUpdate())->firstOrFail();
     }
 
-    public function reviewQueue(User $guardian): Collection
+    public function reviewQueue(User $guardian, ?string $day = null, ?DateTimeInterface $start = null, ?DateTimeInterface $end = null): Collection
     {
         return $this->accessible($guardian)
             ->join('users as children', 'children.id', '=', 'task_occurrences.child_id')
             ->leftJoin('mission_submissions as pending_attempt', fn ($join) => $join
                 ->on('pending_attempt.occurrence_id', '=', 'task_occurrences.id')->whereNull('pending_attempt.reviewed_at'))
             ->where('children.active', true)
-            ->where(fn (Builder $query) => $query->where('status', 'in_review')->orWhere(fn (Builder $expired) => $expired
-                ->whereIn('status', ['pending', 'adjustment'])->where('due_at', '<=', now())))
-            ->orderByRaw("CASE WHEN status = 'in_review' THEN 0 ELSE 1 END")
-            ->orderBy('pending_attempt.submitted_at')->orderBy('due_at')
-            ->get(['task_occurrences.id', 'title', 'status', 'due_at', 'children.name as child_name']);
+            ->when($day !== null, fn (Builder $query) => $query
+                ->where(fn (Builder $date) => $date->where('due_on', $day)->orWhere(fn (Builder $due) => $due
+                    ->where('due_at', '>=', $start)->where('due_at', '<', $end))),
+                fn (Builder $query) => $query
+                    ->where(fn (Builder $queue) => $queue->where('status', 'in_review')->orWhere(fn (Builder $expired) => $expired
+                        ->whereIn('status', ['pending', 'adjustment'])->where('due_at', '<=', now())))
+                    ->orderByRaw("CASE WHEN status = 'in_review' THEN 0 ELSE 1 END")
+                    ->orderBy('pending_attempt.submitted_at'))
+            ->orderBy('due_at')->orderBy('task_occurrences.id')
+            ->select('task_occurrences.id', 'title', 'status', 'due_at', 'children.name as child_name')
+            ->addSelect(['last_submitted_at' => DB::table('mission_submissions')
+                ->whereColumn('occurrence_id', 'task_occurrences.id')->latest('submitted_at')->limit(1)->select('submitted_at')])
+            ->get();
     }
 
     public function attempts(string $mission): Collection
     {
         return $this->submissions($mission)
             ->orderByRaw('CASE WHEN reviewed_at IS NULL THEN 0 ELSE 1 END')->orderByDesc('submitted_at')->orderByDesc('id')
-            ->get(['id', 'comment', 'decision', 'feedback', 'photo_path', 'submitted_at']);
+            ->get(['id', 'comment', 'decision', 'feedback', 'photo_path', 'submitted_at', 'review_version']);
+    }
+
+    public function latestSubmissionId(string $mission): ?string
+    {
+        return $this->submissions($mission)->latest('submitted_at')->latest('id')->value('id');
+    }
+
+    public function archiveReview(object $attempt): void
+    {
+        DB::table('mission_review_changes')->insert([
+            'submission_id' => $attempt->id, 'review_version' => $attempt->review_version,
+            'decision' => $attempt->decision, 'feedback' => $attempt->feedback,
+            'reviewer_id' => $attempt->reviewer_id, 'reviewed_at' => $attempt->reviewed_at,
+        ]);
     }
 
     public function requestSubmissionId(string $mission, string $request): ?string

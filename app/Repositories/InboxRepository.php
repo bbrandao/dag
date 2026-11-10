@@ -9,6 +9,11 @@ use Illuminate\Support\Facades\DB;
 
 final class InboxRepository
 {
+    public function markReviewUnread(string $child, string $submission): void
+    {
+        DB::table('inbox_reads')->where('user_id', $child)->where('submission_id', $submission)->delete();
+    }
+
     public function __construct(private readonly FamilyRepository $families) {}
 
     public function recent(User $user): Collection

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Repositories\FamilyRepository;
+use App\Repositories\InboxRepository;
 use App\Repositories\MissionRepository;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ final class MissionService
         private readonly EvidencePhoto $photos,
         private readonly MissionNotices $notices,
         private readonly AllowanceLedger $ledger,
+        private readonly InboxRepository $inbox,
     ) {}
 
     public function requireSubmissionAccess(User $child, string $mission): void
@@ -88,25 +90,44 @@ final class MissionService
             $family = $this->families->lock($guardian->family_id);
             $occurrence = $this->missions->find($guardian, $mission, lock: true);
             $attempt = $this->missions->submission($mission, $data['submission_id']);
-            if ($attempt->decision === $data['decision'] && $attempt->reviewer_id === $guardian->id) {
+            $previous = $attempt->decision;
+            $feedback = $data['feedback'] ?? null;
+            if ($this->missions->latestSubmissionId($mission) !== $attempt->id) {
+                throw ValidationException::withMessages(['mission' => 'Abra a entrega mais recente antes de revisar.']);
+            }
+            if ($previous === $data['decision'] && $attempt->feedback === $feedback && $attempt->reviewer_id === $guardian->id) {
                 return;
             }
-            if ($attempt->reviewed_at !== null || $occurrence->status !== 'in_review') {
-                throw ValidationException::withMessages(['mission' => 'Esta entrega já recebeu uma revisão.']);
+            if ($occurrence->status !== ($previous ?? 'in_review')
+                || ($previous !== null && (int) ($data['review_version'] ?? -1) !== (int) $attempt->review_version)) {
+                throw ValidationException::withMessages(['mission' => 'A revisão mudou. Abra a entrega novamente e confira o resultado atual.']);
             }
 
             $now = $this->ledger->now($family)->utc();
+            $version = $attempt->review_version + 1;
+            if ($previous === 'approved') {
+                $this->ledger->ensureCreditCanBeChanged($mission);
+                if ($data['decision'] !== 'approved') {
+                    $this->ledger->revokeCredit($mission);
+                }
+            }
+            if ($previous !== null) {
+                $this->missions->archiveReview($attempt);
+                $this->inbox->markReviewUnread($occurrence->child_id, $attempt->id);
+                $this->notices->cancelPreviousReview($attempt->id);
+            }
             $this->missions->updateSubmission($mission, $attempt->id, [
                 'decision' => $data['decision'],
-                'feedback' => $data['feedback'] ?? null,
+                'feedback' => $feedback,
                 'reviewer_id' => $guardian->id,
                 'reviewed_at' => $now,
+                'review_version' => $version,
             ]);
             $this->missions->updateOccurrence($mission, ['status' => $data['decision']]);
-            if ($data['decision'] === 'approved') {
+            if ($data['decision'] === 'approved' && $previous !== 'approved') {
                 $this->ledger->credit($occurrence, $now);
             }
-            $this->notices->queue($occurrence, $attempt->id, $data['decision']);
+            $this->notices->queue($occurrence, $attempt->id, $data['decision'], $version);
         });
 
         defer(fn () => $this->notices->deliver($data['submission_id'], $data['decision']))->always();

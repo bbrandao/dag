@@ -3,22 +3,32 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Repositories\AllowanceRepository;
 use App\Repositories\MissionRepository;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 
 final class MissionOverview
 {
-    public function __construct(private readonly MissionRepository $missions) {}
+    public function __construct(
+        private readonly MissionRepository $missions,
+        private readonly AllowanceRepository $allowances,
+        private readonly TaskCalendar $calendar,
+    ) {}
 
-    public function reviews(User $guardian): array
+    public function reviews(User $guardian, ?string $date = null): array
     {
         abort_unless($guardian->role === User::GUARDIAN, 403);
 
-        $missions = $this->missions->reviewQueue($guardian)
+        $today = now($guardian->family->timezone)->toDateString();
+        if ($date === $today) {
+            $this->calendar->materialize($guardian->family);
+        }
+        $day = $date === null ? null : CarbonImmutable::parse($date, $guardian->family->timezone)->startOfDay();
+        $missions = $this->missions->reviewQueue($guardian, $date, $day?->utc(), $day?->addDay()->utc())
             ->map(fn (object $mission) => $this->display($mission, $guardian));
 
-        return ['missions' => $missions];
+        return ['missions' => $missions, 'date' => $date, 'today' => $today];
     }
 
     public function details(User $user, string $mission, string $routeRole): array
@@ -32,6 +42,7 @@ final class MissionOverview
                 'decision' => $attempt->decision,
                 'feedback' => $attempt->feedback,
                 'submitted_at' => $this->localTime($attempt->submitted_at, $user)->format('d/m/Y H:i'),
+                'review_version' => $attempt->review_version,
                 'photo_url' => $attempt->photo_path ? route('missions.photo', [$mission, $attempt->id], false) : null,
             ]);
         $reopening = $this->missions->latestReopeningReason($mission);
@@ -42,6 +53,8 @@ final class MissionOverview
             'reopening' => $reopening,
             'requestId' => (string) Str::uuid(),
             'isGuardian' => $routeRole === User::GUARDIAN,
+            'creditSettled' => $routeRole === User::GUARDIAN && $occurrence->status === 'approved'
+                && $this->allowances->creditIsSettled($mission),
         ];
     }
 
@@ -63,6 +76,8 @@ final class MissionOverview
             'points' => $mission->points ?? null,
             'photo_mode' => $mission->photo_mode ?? null,
             'child_name' => $mission->child_name ?? null,
+            'submitted_at' => isset($mission->last_submitted_at)
+                ? $this->localTime($mission->last_submitted_at, $user)->format('d/m/Y H:i') : null,
         ];
     }
 

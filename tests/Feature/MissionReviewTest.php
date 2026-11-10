@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Family;
 use App\Models\User;
+use App\Repositories\AllowanceRepository;
+use App\Services\AllowanceLedger;
 use App\Services\EvidencePhoto;
 use App\Services\MissionNotices;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,6 +24,7 @@ final class MissionReviewTest extends TestCase
     use RefreshDatabase;
 
     private bool $gatewayAvailable = true;
+    private bool $supportsMenu = true;
 
     protected function setUp(): void
     {
@@ -30,7 +33,8 @@ final class MissionReviewTest extends TestCase
         $this->travelTo(Carbon::parse('2026-11-09 13:00:00', 'UTC'));
         Storage::fake('local');
         config([
-            'app.url' => 'https://dag.example',
+            'app.url' => 'https://dag.example.com',
+            'dag.public_url' => 'https://dag.example',
             'dag.uazapi.url' => 'https://gateway.example',
             'dag.uazapi.token' => 'fake-token',
             'dag.uazapi.sender' => '+5571999990000',
@@ -42,6 +46,9 @@ final class MissionReviewTest extends TestCase
             ]) : Http::response([], 503),
             'https://gateway.example/send/text' => Http::response(['id' => 'test-message']),
             'https://gateway.example/send/media' => Http::response(['id' => 'test-image']),
+            'https://gateway.example/send/menu' => fn () => $this->supportsMenu
+                ? Http::response(['id' => 'test-menu'])
+                : Http::response(['error' => 'Unsupported'], 422),
         ]);
     }
 
@@ -67,10 +74,11 @@ final class MissionReviewTest extends TestCase
         $this->assertDatabaseMissing('mission_notices', ['recipient_id' => $child->id]);
         $this->get('/app')->assertInertia(fn (Assert $page) => $page
             ->where('childMissions.missions.0.status', 'in_review'));
-        $caption = "Você tem uma entrega para revisar no DAG:\nArrumar a cama\ndeadline: 09/11/2026 18:00\nconcluído em: 09/11/2026 10:00\n"
-            .$payload['comment']."\nhttps://dag.example{$review}";
-        Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/media'
-            && $request['number'] === '5571999991111' && $request['type'] === 'image' && $request['text'] === $caption
+        $caption = "*DAG: Tarefa para revisão 📝*\n\n> Arrumar a cama\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00\n\n_"
+            .$payload['comment'].'_';
+        Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/menu'
+            && $request['number'] === '5571999991111' && $request['type'] === 'button' && $request['text'] === $caption
+            && $request['choices'] === ["Revisar|url:https://dag.example{$review}"]
             && base64_decode($request['file'], true) === Storage::disk('local')->get($attempt->photo_path));
         Storage::disk('local')->assertExists($attempt->photo_path);
         $this->get("{$url}/fotos/{$attempt->id}")->assertOk()->assertHeader('Content-Type', 'image/jpeg');
@@ -95,8 +103,8 @@ final class MissionReviewTest extends TestCase
         $this->assertDatabaseCount('mission_notices', 2);
         $messages = Http::recorded(fn (Request $request) => $request->method() === 'POST')->values();
         $this->assertCount(2, $messages);
-        $this->assertStringContainsString("https://dag.example{$review}", $messages[0][0]['text']);
-        $this->assertStringContainsString("https://dag.example{$url}", $messages[1][0]['text']);
+        $this->assertSame(["Revisar|url:https://dag.example{$review}"], $messages[0][0]['choices']);
+        $this->assertSame(["Ver no DAG|url:https://dag.example{$url}"], $messages[1][0]['choices']);
         $this->assertStringContainsString('Muito bem!', $messages[1][0]['text']);
 
         $this->as($child)->get($url)->assertInertia(fn (Assert $page) => $page
@@ -116,13 +124,14 @@ final class MissionReviewTest extends TestCase
         [$guardian, $child, $mission] = $this->mission('disabled');
         $this->as($guardian)->patch('/app/avisos', ['enabled' => true]);
         $this->as($child)->patch('/app/avisos', ['enabled' => true]);
+        $this->supportsMenu = false;
         $url = "/app/missoes/{$mission}";
         $review = "/guardian/revisoes/{$mission}";
         $this->post("{$url}/entregas", ['request_id' => (string) Str::uuid(), 'comment' => 'Terminei.'])
             ->assertRedirect($url)->assertSessionHasNoErrors();
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text'
             && $request['number'] === '5571999991111'
-            && $request['text'] === "Você tem uma entrega para revisar no DAG:\nArrumar a cama\ndeadline: 09/11/2026 18:00\nconcluído em: 09/11/2026 10:00\nTerminei.\nhttps://dag.example{$review}");
+            && $request['text'] === "*DAG: Tarefa para revisão 📝*\n\n> Arrumar a cama\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00\n\n_Terminei._\n\nRevisar: https://dag.example{$review}");
 
         $submission = DB::table('mission_submissions')->value('id');
         $this->as($guardian)->post($review, ['submission_id' => $submission, 'decision' => 'rejected', 'feedback' => 'Faltou a coberta.'])
@@ -130,7 +139,7 @@ final class MissionReviewTest extends TestCase
         $this->assertDatabaseCount('point_credits', 0);
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text'
             && $request['number'] === '5571999992222'
-            && $request['text'] === "Sua missão foi reprovada no DAG:\nArrumar a cama\nFaltou a coberta.\nhttps://dag.example{$url}");
+            && $request['text'] === "*DAG: Missão REPROVADA! 🚫*\n\n> Arrumar a cama\n\n_Faltou a coberta._\n\nVer no DAG: https://dag.example{$url}");
         $this->as($child)->get($url)->assertInertia(fn (Assert $page) => $page
             ->where('mission.status', 'rejected')->where('attempts.0.decision', 'rejected'));
         $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->where('events.0.message', 'Missão reprovada'));
@@ -152,8 +161,48 @@ final class MissionReviewTest extends TestCase
         app(MissionNotices::class)->deliver();
         $this->assertDatabaseHas('mission_notices', ['kind' => 'submitted', 'status' => 'sent', 'attempts' => 2]);
         $this->assertDatabaseHas('task_occurrences', ['id' => $mission, 'status' => 'in_review']);
-        Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text'
+        Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/menu'
             && $request['number'] === '5571999991111');
+    }
+
+    public function test_guardian_can_filter_by_day_and_correct_a_review_until_allowance_closes(): void
+    {
+        [$guardian, $child, $mission] = $this->mission('disabled');
+        $reviews = '/guardian/revisoes';
+        $review = "{$reviews}/{$mission}";
+        $this->as($guardian)->get("{$reviews}?date=2026-11-09")->assertInertia(fn (Assert $page) => $page
+            ->where('date', '2026-11-09')->where('missions.0.status', 'pending'));
+        $this->as($child)->patch('/app/avisos', ['enabled' => true]);
+        $this->post("/app/missoes/{$mission}/entregas", ['request_id' => (string) Str::uuid()]);
+        $submission = DB::table('mission_submissions')->value('id');
+        $this->as($guardian)->post($review, ['submission_id' => $submission, 'decision' => 'approved'])
+            ->assertSessionHasNoErrors();
+        $this->get("{$reviews}?date=2026-11-09")->assertInertia(fn (Assert $page) => $page->where('missions.0.status', 'approved'));
+        $this->get("{$reviews}?date=2026-11-08")->assertInertia(fn (Assert $page) => $page->has('missions', 0));
+
+        $this->as($child)->patch('/app/avisos/lidos', ['ids' => [$submission]]);
+        $this->as($guardian)->post($review, ['submission_id' => $submission, 'decision' => 'rejected', 'review_version' => 1])
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('point_credits', 0);
+        $this->as($child)->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 1]);
+        $this->as($guardian)->post($review, ['submission_id' => $submission, 'decision' => 'adjustment', 'review_version' => 1, 'feedback' => 'Ajuste.'])
+            ->assertSessionHasErrors('mission');
+        $this->post($review, ['submission_id' => $submission, 'decision' => 'adjustment', 'review_version' => 2, 'feedback' => 'Ajuste.'])
+            ->assertSessionHasNoErrors();
+        $this->post($review, ['submission_id' => $submission, 'decision' => 'approved', 'review_version' => 3])
+            ->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('point_credits', 1);
+        $this->assertDatabaseCount('mission_review_changes', 3);
+        $this->assertDatabaseHas('mission_notices', ['submission_id' => $submission, 'kind' => 'approved', 'review_version' => 4, 'status' => 'sent']);
+
+        $ledger = app(AllowanceLedger::class);
+        $ledger->setRate($guardian, 10);
+        $credits = app(AllowanceRepository::class)->availableCredits($child);
+        $this->assertNotNull($ledger->manual($child, $guardian, (string) Str::uuid(), $ledger->fingerprint($credits)));
+        $this->post($review, ['submission_id' => $submission, 'decision' => 'rejected', 'review_version' => 4])
+            ->assertSessionHasErrors('mission');
+        $this->assertDatabaseHas('mission_submissions', ['id' => $submission, 'decision' => 'approved', 'review_version' => 4]);
+        $this->assertDatabaseCount('payout_items', 1);
     }
 
     public function test_adjustment_requires_feedback_and_expired_mission_requires_reopening(): void

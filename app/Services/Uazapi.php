@@ -26,6 +26,24 @@ final class Uazapi
         ], 'avisos', 15);
     }
 
+    public function sendLinkButton(string $phone, #[\SensitiveParameter] string $message, string $label, string $url, #[\SensitiveParameter] ?string $image): string
+    {
+        $payload = ['type' => 'button', 'text' => $message, 'choices' => ["{$label}|url:{$url}"]];
+        if ($image !== null) {
+            $payload['file'] = base64_encode($image);
+            $payload['mimetype'] = 'image/jpeg';
+        }
+
+        $result = $this->send($phone, '/send/menu', $payload, 'avisos', 15);
+        if ($result !== 'unsupported') {
+            return $result;
+        }
+
+        $fallback = "{$message}\n\n{$label}: {$url}";
+
+        return $image === null ? $this->sendText($phone, $fallback) : $this->sendImage($phone, $image, $fallback);
+    }
+
     private function send(string $phone, string $endpoint, #[\SensitiveParameter] array $payload, string $purpose, int $timeout): string
     {
         $url = config('dag.uazapi.url');
@@ -95,6 +113,7 @@ final class Uazapi
             return match (true) {
                 $response->status() === 429 => 'pending',
                 $response->serverError() => 'unknown',
+                $endpoint === '/send/menu' && in_array($response->status(), [400, 404, 405, 415, 422], true) => 'unsupported',
                 default => 'failed',
             };
         }

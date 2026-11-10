@@ -24,6 +24,8 @@ Para usar o host interno de um PostgreSQL separado no EasyPanel, selecione `comp
 
 Em **Environment**, habilite **Create .env file** e cole o [modelo de produção](../.env.production.example). Preencha `APP_URL` com o domínio HTTPS, a conexão do PostgreSQL e as credenciais da instância Uazapi. Em `WHATSAPP_SENDER_NUMBER`, informe o número pareado no formato internacional, com `+` e DDI.
 
+`DAG_PUBLIC_URL` define o domínio dos links de WhatsApp enviados pelo app e pelo agendador. No `compose.easypanel.yaml`, o padrão é `https://dag.eclud.com.br`. Em outra instalação, defina a variável com o domínio HTTPS real, igual ao `APP_URL`.
+
 O arquivo `compose.easypanel.yaml` usa `easypanel-promovilas-prod` por padrão para que o painel consiga validar a origem antes de carregar o ambiente. Se usar outra rede privada, defina `DAG_POSTGRES_NETWORK` com o nome exato da rede da VPS.
 
 Para uma instalação nova, gere uma chave Laravel com `openssl rand -base64 32` e prefixe o resultado com `base64:` em `APP_KEY`. Gere `DAG_PHONE_KEY` e `DAG_OTP_KEY` com duas execuções separadas de `openssl rand -hex 32`. Guarde os valores no painel. Se estiver restaurando dados de outra instalação, preserve as chaves de origem e restaure também o volume de fotos.

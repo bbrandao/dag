@@ -10,6 +10,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 final class AllowanceLedger
 {
@@ -48,6 +49,18 @@ final class AllowanceLedger
             'conversion_rate_id' => $rate?->id,
             'amount_cents' => $rate ? $occurrence->points * $rate->cents_per_point : null,
         ]);
+    }
+
+    public function ensureCreditCanBeChanged(string $occurrence): void
+    {
+        if ($this->accounts->creditIsSettled($occurrence)) {
+            throw ValidationException::withMessages(['mission' => 'Os pontos desta entrega já entraram em uma mesada fechada.']);
+        }
+    }
+
+    public function revokeCredit(string $occurrence): void
+    {
+        $this->accounts->removeCredit($occurrence);
     }
 
     public function settle(User $child): void

@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'public_url' => env('DAG_PUBLIC_URL'),
     'phone_key' => env('DAG_PHONE_KEY'),
     'otp_key' => env('DAG_OTP_KEY'),
     'uazapi' => [

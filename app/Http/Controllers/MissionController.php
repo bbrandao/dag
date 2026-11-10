@@ -20,7 +20,9 @@ final class MissionController
     {
         Inertia::encryptHistory();
 
-        return Inertia::render('Reviews', $this->overview->reviews($request->user()));
+        $data = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
+
+        return Inertia::render('Reviews', $this->overview->reviews($request->user(), $data['date'] ?? null));
     }
 
     public function show(Request $request, string $mission): Response
@@ -28,7 +30,10 @@ final class MissionController
         $role = $request->routeIs('reviews.show') ? User::GUARDIAN : User::CHILD;
         Inertia::encryptHistory();
 
-        return Inertia::render('Mission', $this->overview->details($request->user(), $mission, $role));
+        return Inertia::render('Mission', [
+            ...$this->overview->details($request->user(), $mission, $role),
+            'reviewDate' => $role === User::GUARDIAN ? $this->reviewDate($request) : null,
+        ]);
     }
 
     public function submit(Request $request, string $mission): RedirectResponse
@@ -50,13 +55,14 @@ final class MissionController
         abort_unless($request->user()->role === User::GUARDIAN, 403);
         $data = $request->validate([
             'submission_id' => ['required', 'uuid'],
+            'review_version' => ['nullable', 'integer', 'min:0'],
             'decision' => ['required', 'in:approved,rejected,adjustment'],
             'feedback' => ['required_if:decision,adjustment', 'nullable', 'string', 'max:255'],
         ], ['feedback.required_if' => 'Diga o que a criança precisa ajustar.', 'feedback.max' => 'Escreva até 255 caracteres.']);
 
         $this->missions->review($request->user(), $mission, $data);
 
-        return redirect()->route('reviews.show', $mission);
+        return redirect()->route('reviews.show', ['mission' => $mission, 'date' => $this->reviewDate($request)]);
     }
 
     public function reopen(Request $request, string $mission): RedirectResponse
@@ -68,7 +74,7 @@ final class MissionController
         ]);
         $this->missions->reopen($request->user(), $mission, $data);
 
-        return redirect()->route('reviews.show', $mission);
+        return redirect()->route('reviews.show', ['mission' => $mission, 'date' => $this->reviewDate($request)]);
     }
 
     public function photo(Request $request, string $mission, string $submission): StreamedResponse
@@ -78,5 +84,12 @@ final class MissionController
         abort_unless($path && $disk->exists($path), 404);
 
         return $disk->response($path, 'missao.jpg', ['Content-Type' => 'image/jpeg', 'Cache-Control' => 'private, no-store']);
+    }
+
+    private function reviewDate(Request $request): ?string
+    {
+        $date = $request->query('date');
+
+        return is_string($date) && preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date) ? $date : null;
     }
 }

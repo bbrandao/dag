@@ -9,14 +9,16 @@ use Illuminate\Support\Facades\DB;
 
 final class DashboardRepository
 {
-    public function totals(User $user, Collection $ids, DateTimeInterface $month, DateTimeInterface $now): array
+    public function totals(User $user, Collection $ids, DateTimeInterface $month, DateTimeInterface $now, ?string $childToday = null): array
     {
+        $visible = $childToday === null ? '' : " AND (missions.frequency <> 'monthly' OR missions.due_on <= ? OR missions.status <> 'pending')";
+        $openBindings = $childToday === null ? [$now, $now] : [$now, $now, $childToday];
         $missions = DB::table('task_occurrences as missions')
             ->leftJoin('point_credits as credits', 'credits.occurrence_id', '=', 'missions.id')
             ->leftJoin('payout_items as items', 'items.credit_id', '=', 'credits.id')
             ->where('missions.family_id', $user->family_id)->whereIn('missions.child_id', $ids)
             ->groupBy('missions.child_id')->select('missions.child_id')
-            ->selectRaw("SUM(CASE WHEN missions.status IN ('pending', 'adjustment') AND missions.opens_at <= ? AND missions.due_at > ? THEN 1 ELSE 0 END) AS open_count", [$now, $now])
+            ->selectRaw("SUM(CASE WHEN missions.status IN ('pending', 'adjustment') AND missions.opens_at <= ? AND missions.due_at > ?{$visible} THEN 1 ELSE 0 END) AS open_count", $openBindings)
             ->selectRaw("SUM(CASE WHEN missions.status = 'in_review' THEN 1 ELSE 0 END) AS review_count")
             ->selectRaw("SUM(CASE WHEN missions.status IN ('pending', 'adjustment') AND missions.due_at >= ? AND missions.due_at <= ? THEN 1 ELSE 0 END) AS expired_count", [$month, $now])
             ->selectRaw('SUM(CASE WHEN credits.approved_at >= ? THEN 1 ELSE 0 END) AS approved_count', [$month])

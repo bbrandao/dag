@@ -21,6 +21,32 @@ interface Attempt {
     feedback: string | null;
     photo_url: string | null;
     submitted_at: string;
+    review_version: number;
+}
+
+async function preparePhoto(file: File): Promise<File> {
+    const url = URL.createObjectURL(file);
+    try {
+        const image = new Image();
+        image.src = url;
+        await image.decode();
+        const scale = Math.min(1, 2048 / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext('2d', { alpha: false });
+        if (!context) return file;
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const jpeg = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+        return jpeg ? new File([jpeg], 'missao.jpg', { type: 'image/jpeg' }) : file;
+    } catch {
+        // Formatos que o navegador não decodifica seguem para o servidor.
+        return file;
+    } finally {
+        URL.revokeObjectURL(url);
+    }
 }
 
 function ShortText({ id, label, value, onChange, required = false }: {
@@ -43,6 +69,8 @@ function ShortText({ id, label, value, onChange, required = false }: {
 function SubmissionForm({ mission, requestId }: { mission: MissionDetails; requestId: string }) {
     const form = useForm({ request_id: requestId, comment: '', photo: null as File | null });
     const [preview, setPreview] = useState<string>();
+    const [preparing, setPreparing] = useState(false);
+    const [previewFailed, setPreviewFailed] = useState(false);
     const photo = form.data.photo;
     useEffect(() => {
         if (!photo) {
@@ -50,13 +78,33 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
             return;
         }
         const url = URL.createObjectURL(photo);
+        setPreviewFailed(false);
         setPreview(url);
         return () => URL.revokeObjectURL(url);
     }, [photo]);
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
+        if (preparing) return;
         form.post(`/app/missoes/${mission.id}/entregas`, { forceFormData: true, onSuccess: () => form.reset('photo', 'comment') });
+    }
+
+    async function choosePhoto(input: HTMLInputElement) {
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) return;
+        setPreparing(true);
+        form.clearErrors('photo');
+        try {
+            const prepared = await preparePhoto(file);
+            if (prepared.size > 10 * 1024 * 1024) {
+                form.setError('photo', 'Escolha uma foto de até 10 MB.');
+                return;
+            }
+            form.setData('photo', prepared);
+        } finally {
+            setPreparing(false);
+        }
     }
 
     return (
@@ -67,82 +115,91 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
                     <fieldset className="options">
                         <legend>Foto {mission.photo_mode === 'required' ? 'obrigatória' : 'opcional'}</legend>
                         <label>Tirar foto
-                            <input type="file" accept="image/*" capture="environment" disabled={form.processing}
-                                onChange={event => { const file = event.target.files?.[0]; if (file) form.setData('photo', file); event.target.value = ''; }} />
+                            <input type="file" accept="image/*" capture="environment" disabled={form.processing || preparing}
+                                onChange={event => { void choosePhoto(event.currentTarget); }} />
                         </label>
                         <label>Escolher da galeria
-                            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={form.processing}
-                                onChange={event => { const file = event.target.files?.[0]; if (file) form.setData('photo', file); event.target.value = ''; }} />
+                            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" disabled={form.processing || preparing}
+                                onChange={event => { void choosePhoto(event.currentTarget); }} />
                         </label>
-                        {preview && <img className="evidence" src={preview} alt="Prévia da foto escolhida" />}
-                        {photo && <button type="button" className="secondary" disabled={form.processing}
+                        {preparing && <p role="status">Preparando foto…</p>}
+                        {preview && !previewFailed && <img className="evidence" src={preview} alt="Prévia da foto escolhida"
+                            onError={() => setPreviewFailed(true)} />}
+                        {photo && previewFailed && <p>Foto anexada. A prévia deste formato aparece depois do envio.</p>}
+                        {photo && <button type="button" className="secondary" disabled={form.processing || preparing}
                             onClick={() => form.setData('photo', null)}>Remover foto</button>}
                     </fieldset>
                 )}
                 <ShortText id="comment" label="Comentário opcional" value={form.data.comment} onChange={value => form.setData('comment', value)} />
                 <p className="error" role="alert">{Object.values(form.errors).flat().join(' ')}</p>
                 {form.progress && <p role="status">Enviando {form.progress.percentage}%</p>}
-                <button type="submit" disabled={form.processing}>Enviar para revisão</button>
+                <button type="submit" disabled={form.processing || preparing}>Enviar para revisão</button>
             </form>
         </section>
     );
 }
 
-function GuardianActions({ mission, attempt }: { mission: MissionDetails; attempt: Attempt | undefined }) {
-    const review = useForm({ submission_id: attempt?.id ?? '', decision: '', feedback: '' });
+function GuardianActions({ mission, attempt, creditSettled, reviewDate }: {
+    mission: MissionDetails; attempt: Attempt | undefined; creditSettled: boolean; reviewDate: string | null;
+}) {
+    const review = useForm({
+        submission_id: attempt?.id ?? '', review_version: attempt?.review_version ?? 0,
+        decision: String(attempt?.decision ?? ''), feedback: attempt?.feedback ?? '',
+    });
     const reopen = useForm({ new_due_at: '', reason: '' });
     const url = `/guardian/revisoes/${mission.id}`;
+    const query = reviewDate ? `?date=${reviewDate}` : '';
 
-    if (mission.status === 'in_review' && attempt) {
-        return (
-            <section className="card">
-                <h2>Revisar entrega</h2>
-                <form onSubmit={event => { event.preventDefault(); review.post(url); }}>
-                    <label htmlFor="decision">Resultado</label>
-                    <select id="decision" required value={review.data.decision} onChange={event => review.setData('decision', event.target.value)}>
-                        <option value="" disabled>Escolha o resultado</option>
-                        <option value="approved">Aprovar</option>
-                        <option value="rejected">Reprovar</option>
-                        <option value="adjustment">Pedir ajuste</option>
-                    </select>
-                    <ShortText id="feedback" label={review.data.decision === 'adjustment' ? 'O que precisa ajustar?' : 'Mensagem opcional'}
-                        value={review.data.feedback} required={review.data.decision === 'adjustment'}
-                        onChange={value => review.setData('feedback', value)} />
-                    <p className="error" role="alert">{Object.values(review.errors).flat().join(' ')}</p>
-                    <button disabled={review.processing} type="submit">Confirmar revisão</button>
-                </form>
-            </section>
-        );
-    }
-
-    if (mission.status === 'expired') {
-        return (
-            <section className="card">
-                <h2>Reabrir missão</h2>
-                <form onSubmit={event => { event.preventDefault(); reopen.post(`${url}/reabrir`); }}>
-                    <label htmlFor="new-due">Novo prazo no horário da família</label>
-                    <input id="new-due" type="datetime-local" required value={reopen.data.new_due_at}
-                        onChange={event => reopen.setData('new_due_at', event.target.value)} />
-                    <ShortText id="reason" label="Motivo" value={reopen.data.reason} required onChange={value => reopen.setData('reason', value)} />
-                    <p className="error" role="alert">{Object.values(reopen.errors).flat().join(' ')}</p>
-                    <button disabled={reopen.processing} type="submit">Reabrir</button>
-                </form>
-            </section>
-        );
-    }
-
-    return null;
+    return (
+        <>
+            {creditSettled && <p className="card">A revisão está bloqueada. Os pontos desta entrega já entraram em uma mesada fechada.</p>}
+            {!creditSettled && attempt && (mission.status === 'in_review' || attempt.decision) && (
+                <section className="card">
+                    <h2>{attempt.decision ? 'Alterar revisão' : 'Revisar entrega'}</h2>
+                    <form onSubmit={event => { event.preventDefault(); review.post(url + query); }}>
+                        <label htmlFor="decision">Resultado</label>
+                        <select id="decision" required value={review.data.decision} onChange={event => review.setData('decision', event.target.value)}>
+                            <option value="" disabled>Escolha o resultado</option>
+                            <option value="approved">Aprovar</option>
+                            <option value="rejected">Reprovar</option>
+                            <option value="adjustment">Pedir ajuste</option>
+                        </select>
+                        <ShortText id="feedback" label={review.data.decision === 'adjustment' ? 'O que precisa ajustar?' : 'Mensagem opcional'}
+                            value={review.data.feedback} required={review.data.decision === 'adjustment'}
+                            onChange={value => review.setData('feedback', value)} />
+                        <p className="error" role="alert">{Object.values(review.errors).flat().join(' ')}</p>
+                        <button disabled={review.processing} type="submit">Confirmar revisão</button>
+                    </form>
+                </section>
+            )}
+            {mission.status === 'expired' && (
+                <section className="card">
+                    <h2>Reabrir missão</h2>
+                    <form onSubmit={event => { event.preventDefault(); reopen.post(`${url}/reabrir${query}`); }}>
+                        <label htmlFor="new-due">Novo prazo no horário da família</label>
+                        <input id="new-due" type="datetime-local" required value={reopen.data.new_due_at}
+                            onChange={event => reopen.setData('new_due_at', event.target.value)} />
+                        <ShortText id="reason" label="Motivo" value={reopen.data.reason} required onChange={value => reopen.setData('reason', value)} />
+                        <p className="error" role="alert">{Object.values(reopen.errors).flat().join(' ')}</p>
+                        <button disabled={reopen.processing} type="submit">Reabrir</button>
+                    </form>
+                </section>
+            )}
+        </>
+    );
 }
 
-export default function Mission({ mission, attempts, reopening, requestId, isGuardian }: {
+export default function Mission({ mission, attempts, reopening, requestId, isGuardian, creditSettled, reviewDate }: {
     mission: MissionDetails; attempts: Attempt[]; reopening: string | null; requestId: string; isGuardian: boolean;
+    creditSettled: boolean; reviewDate: string | null;
 }) {
     return (
         <main className="screen">
             <Head title={mission.title} />
             <header className="topbar">
                 <h1>{mission.title}</h1>
-                <Link className="button secondary" href={isGuardian ? '/guardian/revisoes' : '/app/missoes'}>Voltar</Link>
+                <Link className="button secondary" href={isGuardian
+                    ? `/guardian/revisoes${reviewDate ? `?date=${reviewDate}` : ''}` : '/app/missoes'}>Voltar</Link>
             </header>
             <section className={`card mission-card status-${mission.status}`}>
                 <div className="mission-card-labels"><MissionStatusBadge status={mission.status} /></div>
@@ -163,7 +220,8 @@ export default function Mission({ mission, attempts, reopening, requestId, isGua
                 ))}
             </section>}
             {isGuardian
-                ? <GuardianActions mission={mission} attempt={attempts[0]} key={attempts[0]?.id ?? mission.id} />
+                ? <GuardianActions mission={mission} attempt={attempts[0]} creditSettled={creditSettled} reviewDate={reviewDate}
+                    key={attempts[0] ? `${attempts[0].id}:${attempts[0].review_version}` : mission.id} />
                 : (mission.status === 'pending' || mission.status === 'adjustment') &&
                     <SubmissionForm mission={mission} requestId={requestId} key={attempts[0]?.id ?? mission.id} />}
         </main>

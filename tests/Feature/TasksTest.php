@@ -50,7 +50,7 @@ final class TasksTest extends TestCase
     {
         [$guardian, $child] = $this->family();
         $this->as($guardian)->post('/guardian/tasks', $this->task($child, [
-            'title' => 'Mensal', 'frequency' => 'monthly', 'month_day' => 31,
+            'title' => 'Mensal', 'frequency' => 'monthly', 'month_day' => 31, 'weekday_time' => '19:00',
         ]))->assertSessionHasNoErrors();
         $this->post('/guardian/tasks', $this->task($child, [
             'title' => 'Semanal', 'frequency' => 'weekly', 'weekly_day' => 7,
@@ -58,13 +58,18 @@ final class TasksTest extends TestCase
         $this->post('/guardian/tasks', $this->task($child))->assertSessionHasNoErrors();
 
         $this->as($child)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
-            ->has('missions', 3)
+            ->has('missions', 2)
             ->where('missions.0.title', 'Arrumar a cama')
-            ->where('missions.1.due_on', '2026-11-15')
-            ->where('missions.2.due_on', '2026-11-30'));
+            ->where('missions.1.due_on', '2026-11-15'));
 
         $this->get('/app/missoes?frequency=weekly')->assertInertia(fn (Assert $page) => $page
             ->has('missions', 1)->where('missions.0.title', 'Semanal'));
+        $this->get('/app/missoes?frequency=monthly')->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.due_on', '2026-11-30'));
+        $this->get('/app')->assertInertia(fn (Assert $page) => $page
+            ->has('childMissions.missions', 2)->where('progress.0.open', 2));
+        $this->travelTo(Carbon::parse('2026-11-30 13:00:00', 'UTC'));
+        $this->get('/app/missoes')->assertInertia(fn (Assert $page) => $page->where('missions.3.title', 'Mensal'));
     }
 
     public function test_dashboard_shows_a_same_day_mission_registered_after_its_deadline(): void
