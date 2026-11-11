@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Repositories\MissionRepository;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
@@ -25,12 +26,19 @@ final class EvidencePhoto
         }
         if ($info === false || ! in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)
             || $info[0] * $info[1] > 24000000) {
+            Log::notice('DAG: foto recebida não pôde ser validada.', [
+                'received_bytes' => strlen($contents),
+                'mime' => $file->getMimeType(),
+                'width' => $info === false ? null : $info[0],
+                'height' => $info === false ? null : $info[1],
+            ]);
             $this->invalid();
         }
 
         $image = @imagecreatefromstring($contents);
 
         if ($image === false) {
+            Log::notice('DAG: falha na decodificação da foto.', ['received_bytes' => strlen($contents), 'mime' => $info['mime']]);
             $this->invalid();
         }
 

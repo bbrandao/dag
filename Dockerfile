@@ -12,7 +12,7 @@ FROM php:8.3-apache-bookworm
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq-dev libjpeg62-turbo-dev libpng-dev libwebp-dev imagemagick unzip \
     && docker-php-ext-configure gd --with-jpeg --with-webp \
-    && docker-php-ext-install pdo_pgsql gd \
+    && docker-php-ext-install pdo_pgsql gd bcmath \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/html

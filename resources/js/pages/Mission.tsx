@@ -2,6 +2,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { formatDate, type MissionStatus, missionStatuses } from '../tasks';
 import { MissionStatusBadge } from '../MissionCard';
+import { snapshotPhoto } from '../photos';
 
 interface MissionDetails {
     id: string;
@@ -90,18 +91,21 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
     }
 
     async function choosePhoto(input: HTMLInputElement) {
-        const file = input.files?.[0];
-        input.value = '';
-        if (!file) return;
+        if (!input.files?.[0]) return;
         setPreparing(true);
         form.clearErrors('photo');
+        form.setData('photo', null);
         try {
+            const file = await snapshotPhoto(input);
+            if (!file) return;
             const prepared = await preparePhoto(file);
             if (prepared.size > 10 * 1024 * 1024) {
                 form.setError('photo', 'Escolha uma foto de até 10 MB.');
                 return;
             }
             form.setData('photo', prepared);
+        } catch {
+            form.setError('photo', 'Não conseguimos ler esta foto. Tire outra foto ou selecione uma imagem da galeria.');
         } finally {
             setPreparing(false);
         }
@@ -126,14 +130,14 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
                         {preview && !previewFailed && <img className="evidence" src={preview} alt="Prévia da foto escolhida"
                             onError={() => setPreviewFailed(true)} />}
                         {photo && previewFailed && <p>Foto anexada. A prévia deste formato aparece depois do envio.</p>}
-                        {photo && <button type="button" className="secondary" disabled={form.processing || preparing}
-                            onClick={() => form.setData('photo', null)}>Remover foto</button>}
+                        {(photo || form.errors.photo) && <button type="button" className="secondary" disabled={form.processing || preparing}
+                            onClick={() => { form.setData('photo', null); form.clearErrors('photo'); }}>Remover foto</button>}
                     </fieldset>
                 )}
                 <ShortText id="comment" label="Comentário opcional" value={form.data.comment} onChange={value => form.setData('comment', value)} />
                 <p className="error" role="alert">{Object.values(form.errors).flat().join(' ')}</p>
                 {form.progress && <p role="status">Enviando {form.progress.percentage}%</p>}
-                <button type="submit" disabled={form.processing || preparing}>Enviar para revisão</button>
+                <button type="submit" disabled={form.processing || preparing || Boolean(form.errors.photo)}>Enviar para revisão</button>
             </form>
         </section>
     );

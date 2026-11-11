@@ -4,6 +4,7 @@ namespace App\Services;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\HttpFactory;
+use Illuminate\Support\Facades\Log;
 use Minishlink\WebPush\Subscription;
 use Minishlink\WebPush\WebPush;
 use Psr\Http\Client\ClientInterface;
@@ -68,6 +69,7 @@ class PushTransport
                 client: $this->client ?? new Client(['connect_timeout' => 2, 'timeout' => 4, 'allow_redirects' => false]),
                 requestFactory: $factory,
                 streamFactory: $factory,
+                logger: Log::channel(),
             );
         }
 
