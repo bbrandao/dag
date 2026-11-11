@@ -1,8 +1,8 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { formatDate, type MissionStatus, missionStatuses } from '../tasks';
 import { MissionStatusBadge } from '../MissionCard';
-import { snapshotPhoto } from '../photos';
+import { encodePhoto, snapshotPhoto } from '../photos';
 
 interface MissionDetails {
     id: string;
@@ -31,17 +31,7 @@ async function preparePhoto(file: File): Promise<File> {
         const image = new Image();
         image.src = url;
         await image.decode();
-        const scale = Math.min(1, 2048 / Math.max(image.naturalWidth, image.naturalHeight));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-        const context = canvas.getContext('2d', { alpha: false });
-        if (!context) return file;
-        context.fillStyle = '#fff';
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        const jpeg = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.86));
-        return jpeg ? new File([jpeg], 'missao.jpg', { type: 'image/jpeg' }) : file;
+        return await encodePhoto(image, image.naturalWidth, image.naturalHeight) ?? file;
     } catch {
         // Formatos que o navegador não decodifica seguem para o servidor.
         return file;
@@ -72,7 +62,16 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
     const [preview, setPreview] = useState<string>();
     const [preparing, setPreparing] = useState(false);
     const [previewFailed, setPreviewFailed] = useState(false);
+    const [cameraOpen, setCameraOpen] = useState(false);
+    const [cameraReady, setCameraReady] = useState(false);
+    const [cameraFailed, setCameraFailed] = useState(false);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const cameraRequest = useRef<AbortController | null>(null);
+    const supportsCamera = Boolean(navigator.mediaDevices?.getUserMedia);
     const photo = form.data.photo;
+
+    useEffect(() => () => cameraRequest.current?.abort(), []);
+
     useEffect(() => {
         if (!photo) {
             setPreview(undefined);
@@ -86,8 +85,58 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (preparing) return;
+        if (preparing || cameraOpen) return;
         form.post(`/app/missoes/${mission.id}/entregas`, { forceFormData: true, onSuccess: () => form.reset('photo', 'comment') });
+    }
+
+    function closeCamera() {
+        cameraRequest.current?.abort();
+        if (videoRef.current) videoRef.current.srcObject = null;
+        setCameraOpen(false);
+        setCameraReady(false);
+    }
+
+    async function openCamera() {
+        const request = new AbortController();
+        cameraRequest.current = request;
+        setCameraFailed(false);
+        setCameraOpen(true);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' } } });
+            const video = videoRef.current;
+            const stop = () => stream.getTracks().forEach(track => track.stop());
+            if (request.signal.aborted || !video) {
+                stop();
+                return;
+            }
+            request.signal.addEventListener('abort', stop, { once: true });
+            video.srcObject = stream;
+            await video.play();
+            if (!request.signal.aborted) setCameraReady(true);
+        } catch {
+            if (request.signal.aborted) return;
+            closeCamera();
+            setCameraFailed(true);
+        }
+    }
+
+    async function takePhoto() {
+        const video = videoRef.current;
+        if (!video?.videoWidth || !video.videoHeight) return;
+        setPreparing(true);
+        form.clearErrors('photo');
+        try {
+            const pendingPhoto = encodePhoto(video, video.videoWidth, video.videoHeight);
+            closeCamera();
+            const captured = await pendingPhoto;
+            if (!captured) throw new Error('Não foi possível gerar a foto.');
+            form.setData('photo', captured);
+        } catch {
+            form.setError('photo', 'Não conseguimos tirar a foto. Tente novamente ou escolha uma foto da galeria.');
+            setCameraFailed(true);
+        } finally {
+            setPreparing(false);
+        }
     }
 
     async function choosePhoto(input: HTMLInputElement) {
@@ -118,12 +167,21 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
                 {mission.photo_mode !== 'disabled' && (
                     <fieldset className="options">
                         <legend>Foto {mission.photo_mode === 'required' ? 'obrigatória' : 'opcional'}</legend>
-                        <label>Tirar foto
+                        {supportsCamera && !cameraOpen && <button type="button" className="secondary" disabled={form.processing || preparing}
+                            onClick={() => { void openCamera(); }}>Abrir câmera</button>}
+                        <div hidden={!cameraOpen}>
+                            <video ref={videoRef} className="evidence" muted playsInline aria-label="Prévia da câmera" />
+                            {!cameraReady && <p role="status">Aguardando acesso à câmera…</p>}
+                            <button type="button" disabled={!cameraReady || preparing} onClick={() => { void takePhoto(); }}>Tirar foto</button>
+                            <button type="button" className="secondary" onClick={closeCamera}>Fechar câmera</button>
+                        </div>
+                        {cameraFailed && <p role="status">Não foi possível abrir a câmera no DAG. Use a câmera do celular ou a galeria.</p>}
+                        {(!supportsCamera || cameraFailed) && !cameraOpen && <label>Câmera do celular
                             <input type="file" accept="image/*" capture="environment" disabled={form.processing || preparing}
                                 onChange={event => { void choosePhoto(event.currentTarget); }} />
-                        </label>
+                        </label>}
                         <label>Escolher da galeria
-                            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" disabled={form.processing || preparing}
+                            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" disabled={form.processing || preparing || cameraOpen}
                                 onChange={event => { void choosePhoto(event.currentTarget); }} />
                         </label>
                         {preparing && <p role="status">Preparando foto…</p>}
@@ -137,7 +195,7 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
                 <ShortText id="comment" label="Comentário opcional" value={form.data.comment} onChange={value => form.setData('comment', value)} />
                 <p className="error" role="alert">{Object.values(form.errors).flat().join(' ')}</p>
                 {form.progress && <p role="status">Enviando {form.progress.percentage}%</p>}
-                <button type="submit" disabled={form.processing || preparing || Boolean(form.errors.photo)}>Enviar para revisão</button>
+                <button type="submit" disabled={form.processing || preparing || cameraOpen || Boolean(form.errors.photo)}>Enviar para revisão</button>
             </form>
         </section>
     );

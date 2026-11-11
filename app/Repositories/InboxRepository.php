@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\DB;
 
 final class InboxRepository
 {
+    private const LIMIT = 5;
+
     public function markReviewUnread(string $child, string $submission): void
     {
         DB::table('inbox_reads')->where('user_id', $child)->where('submission_id', $submission)->delete();
@@ -19,15 +21,14 @@ final class InboxRepository
     public function recent(User $user): Collection
     {
         $field = $user->role === User::GUARDIAN ? 'submitted_at' : 'reviewed_at';
-        return $this->events($user)->orderByRaw('CASE WHEN reads.user_id IS NULL THEN 0 ELSE 1 END')
-            ->latest($field)->latest('attempts.id')
-            ->limit(30)->get(['attempts.id', 'mission.id as mission_id', 'mission.title', 'attempts.decision',
+        return $this->events($user)->latest("attempts.{$field}")->latest('attempts.id')
+            ->limit(self::LIMIT)->get(['attempts.id', 'mission.id as mission_id', 'mission.title', 'attempts.decision',
                 "attempts.{$field} as occurred_at", 'reads.user_id as read_by']);
     }
 
     public function unread(User $user): int
     {
-        return $this->events($user)->whereNull('reads.user_id')->count();
+        return $this->recent($user)->whereNull('read_by')->count();
     }
 
     public function markRead(User $user, array $submissions): void
@@ -50,6 +51,7 @@ final class InboxRepository
             return $query->where('mission.child_id', $user->id)->whereNotNull('attempts.reviewed_at');
         }
 
-        return $query->whereIn('mission.child_id', $this->families->linkedChildIds($user));
+        return $query->whereIn('mission.child_id', $this->families->linkedChildIds($user))
+            ->where('mission.status', 'in_review')->whereNull('attempts.reviewed_at');
     }
 }

@@ -7,7 +7,7 @@ const source = await readFile(new URL('../../resources/js/photos.ts', import.met
 const compiled = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
 }).outputText;
-const { snapshotPhoto } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
+const { encodePhoto, snapshotPhoto } = await import('data:text/javascript;base64,' + Buffer.from(compiled).toString('base64'));
 
 test('copies the camera file before resetting its input', async () => {
     const bytes = Uint8Array.of(255, 216, 255, 224);
@@ -51,4 +51,28 @@ test('rejects empty camera files and read failures', async () => {
 
 test('leaves the selection alone when the picker is cancelled', async () => {
     assert.equal(await snapshotPhoto({ files: [], set value(_) { assert.fail('Unexpected input reset'); } }), null);
+});
+
+test('copies a camera frame into a scaled JPEG for preview and upload', async t => {
+    const video = { videoWidth: 2160, videoHeight: 3840 };
+    const jpeg = new Blob([Uint8Array.of(255, 216, 255, 224)], { type: 'image/jpeg' });
+    const drawImage = t.mock.fn();
+    const canvas = {
+        getContext: () => ({ fillRect() {}, drawImage }),
+        toBlob(resolve, format) {
+            assert.equal(format, 'image/jpeg');
+            resolve(jpeg);
+        },
+    };
+    globalThis.document = { createElement: () => canvas };
+    t.after(() => { delete globalThis.document; });
+
+    const file = await encodePhoto(video, video.videoWidth, video.videoHeight);
+
+    assert.equal(canvas.width, 1152);
+    assert.equal(canvas.height, 2048);
+    assert.deepEqual(drawImage.mock.calls[0].arguments, [video, 0, 0, 1152, 2048]);
+    assert.equal(file.name, 'missao.jpg');
+    assert.equal(file.type, 'image/jpeg');
+    assert.deepEqual(await file.arrayBuffer(), await jpeg.arrayBuffer());
 });

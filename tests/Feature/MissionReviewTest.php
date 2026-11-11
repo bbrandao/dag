@@ -94,9 +94,11 @@ final class MissionReviewTest extends TestCase
             ->component('Inbox')->where('events.0.href', $review));
         $this->patch('/app/avisos/lidos', ['ids' => [$attempt->id]])->assertRedirect('/app/avisos');
         $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 0]);
+        $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->has('events', 1)->where('events.0.unread', false));
 
         $decision = ['submission_id' => $attempt->id, 'decision' => 'approved', 'feedback' => 'Muito bem!'];
         $this->post($review, $decision)->assertRedirect($review)->assertSessionHasNoErrors();
+        $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->has('events', 0));
         $this->post($review, $decision)->assertRedirect($review);
         $this->assertDatabaseCount('point_credits', 1);
         $this->assertDatabaseHas('point_credits', ['occurrence_id' => $mission, 'points' => 10]);
@@ -136,6 +138,8 @@ final class MissionReviewTest extends TestCase
         $submission = DB::table('mission_submissions')->value('id');
         $this->as($guardian)->post($review, ['submission_id' => $submission, 'decision' => 'rejected', 'feedback' => 'Faltou a coberta.'])
             ->assertRedirect($review)->assertSessionHasNoErrors();
+        $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->has('events', 0));
+        $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 0]);
         $this->assertDatabaseCount('point_credits', 0);
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text'
             && $request['number'] === '5571999992222'
@@ -216,6 +220,7 @@ final class MissionReviewTest extends TestCase
         $decision = ['submission_id' => DB::table('mission_submissions')->value('id'), 'decision' => 'adjustment'];
         $this->as($guardian)->post($review, $decision)->assertSessionHasErrors('feedback');
         $this->post($review, [...$decision, 'feedback' => 'Dobre a coberta.'])->assertRedirect($review)->assertSessionHasNoErrors();
+        $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->has('events', 0));
         $this->assertDatabaseCount('point_credits', 0);
 
         $this->travelTo(Carbon::parse('2026-11-09 21:00:00', 'UTC'));
@@ -227,7 +232,45 @@ final class MissionReviewTest extends TestCase
         $this->as($child)->post("{$url}/entregas", $payload)->assertRedirect($url)->assertSessionHasNoErrors();
         $this->assertDatabaseCount('mission_submissions', 2);
         $this->assertDatabaseHas('task_occurrences', ['id' => $mission, 'status' => 'in_review']);
+        $newAttempt = DB::table('mission_submissions')->where('request_id', $payload['request_id'])->value('id');
+        $this->as($guardian)->get('/app/avisos')->assertInertia(fn (Assert $page) => $page
+            ->has('events', 1)->where('events.0.id', $newAttempt)->where('events.0.unread', true));
         Http::assertNothingSent();
+    }
+
+    public function test_inbox_shows_only_the_five_latest_notices_even_when_some_were_read(): void
+    {
+        [$guardian, $child, $mission] = $this->mission('disabled');
+        $missions = [$mission];
+        for ($index = 2; $index <= 6; $index++) {
+            $title = "Missão {$index}";
+            $this->post('/guardian/tasks', [
+                'title' => $title, 'criteria' => 'Concluir atividade.', 'points' => 1,
+                'frequency' => 'daily', 'starts_on' => '2026-11-09', 'weekday_time' => '18:00',
+                'weekend_time' => '12:00', 'daily_days' => [1], 'child_ids' => [$child->id], 'photo_mode' => 'disabled',
+            ])->assertSessionHasNoErrors();
+            $missions[] = DB::table('task_occurrences')->where('title', $title)->value('id');
+        }
+
+        foreach ($missions as $mission) {
+            $this->travel(1)->minutes();
+            $this->as($child)->post("/app/missoes/{$mission}/entregas", ['request_id' => (string) Str::uuid()])
+                ->assertSessionHasNoErrors();
+        }
+        $this->as($guardian)->get('/app/avisos')->assertInertia(fn (Assert $page) => $page
+            ->has('events', 5)->where('events.0.title', 'Missão 6')->where('events.4.title', 'Missão 2'));
+        $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 5]);
+
+        foreach ($missions as $mission) {
+            $this->travel(1)->minutes();
+            $submission = DB::table('mission_submissions')->where('occurrence_id', $mission)->value('id');
+            $this->post("/guardian/revisoes/{$mission}", ['submission_id' => $submission, 'decision' => 'approved'])
+                ->assertSessionHasNoErrors();
+        }
+        $this->as($child)->patch('/app/avisos/lidos', ['ids' => [$submission]])->assertRedirect('/app/avisos');
+        $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->has('events', 5)
+            ->where('events.0.id', $submission)->where('events.0.unread', false)->where('events.4.title', 'Missão 2'));
+        $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 4]);
     }
 
     private function mission(string $photoMode): array

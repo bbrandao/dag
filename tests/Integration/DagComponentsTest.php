@@ -127,7 +127,7 @@ final class DagComponentsTest extends TestCase
         $this->assertSame('Missão aprovada', $inbox->events($child)->sole()['message']);
         $inbox->markRead($child, [$submission->id]);
         $this->assertSame(0, app(InboxRepository::class)->unread($child));
-        $this->assertSame(1, app(InboxRepository::class)->unread($guardian));
+        $this->assertSame(0, app(InboxRepository::class)->unread($guardian));
     }
 
     public function test_allowance_services_value_credit_close_and_keep_dashboard_totals_consistent(): void
