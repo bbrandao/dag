@@ -1,5 +1,4 @@
 import { Head, Link } from '@inertiajs/react';
-import ChildProfileForm from './ChildProfileForm';
 import { Badge } from '../components/ui/badge';
 import { MissionCard, type MissionSummary } from '../MissionCard';
 
@@ -98,20 +97,6 @@ export default function Dashboard({ role, family, children, earnedPoints, monthL
                     );
                 })}
             </section>
-            {isGuardian && (
-                <section className="card" aria-labelledby="children-title">
-                    <h2 id="children-title">Filhos vinculados</h2>
-                    {children.length ? (
-                        <ul>{children.map(child => (
-                            <li key={child.id}>
-                                {child.name} <Link href={`/guardian/children/${child.id}/editar`} aria-label={`Editar perfil de ${child.name}`}>Editar</Link>
-                                {' · '}<Link href={`/guardian/mesadas/${child.id}`} aria-label={`Ver mesadas de ${child.name}`}>Mesadas</Link>
-                            </li>
-                        ))}</ul>
-                    ) : <p>Cadastre o primeiro perfil da família.</p>}
-                    <ChildProfileForm />
-                </section>
-            )}
         </main>
     );
 }

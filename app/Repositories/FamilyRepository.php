@@ -27,6 +27,15 @@ final class FamilyRepository
         return $this->activeChildren($guardian)->orderBy('name')->get(['id', 'name']);
     }
 
+    public function childProfiles(User $guardian): Collection
+    {
+        return User::query()->join('children', 'children.user_id', '=', 'users.id')
+            ->where('users.family_id', $guardian->family_id)->where('users.role', User::CHILD)
+            ->where('users.active', true)->whereIn('users.id', $this->linkedChildIds($guardian))
+            ->orderBy('users.name')->orderBy('users.id')
+            ->get(['users.id', 'users.name', 'users.phone', 'children.birth_date']);
+    }
+
     public function activeChildIds(User $guardian, ?array $selected = null): Collection
     {
         return $this->activeChildren($guardian)

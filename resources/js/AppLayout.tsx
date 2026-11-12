@@ -5,11 +5,11 @@ import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
 import { openNotice } from './notices';
-import InstallDag from './InstallDag';
+import { useDagInstall } from './useDagInstall';
 import { ProfileMenu, type Viewer } from './ProfileMenu';
 import { useNoticeSummary } from './useNoticeSummary';
 
-function Navigation({ viewer }: { viewer: Viewer }) {
+function Navigation({ viewer, installation }: { viewer: Viewer; installation: ReturnType<typeof useDagInstall> }) {
     const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 48rem)').matches);
     const [panel, setPanel] = useState<'notices' | 'profile' | null>(null);
     const { summary, failed, refresh } = useNoticeSummary();
@@ -67,7 +67,7 @@ function Navigation({ viewer }: { viewer: Viewer }) {
                         </div>
                     </PopoverContent>
                 </Popover>
-                <ProfileMenu viewer={viewer} side={side} open={panel === 'profile'} onOpenChange={open => {
+                <ProfileMenu viewer={viewer} installation={installation} side={side} open={panel === 'profile'} onOpenChange={open => {
                     setPanel(current => open ? 'profile' : current === 'profile' ? null : current);
                 }} />
             </div>
@@ -76,12 +76,12 @@ function Navigation({ viewer }: { viewer: Viewer }) {
 }
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-    const { component, props } = usePage<{ viewer?: Viewer | null }>();
+    const { props } = usePage<{ viewer?: Viewer | null }>();
     const viewer = props.viewer;
+    const installation = useDagInstall();
 
     return <div className={viewer ? 'dag-authenticated' : undefined}>
-        {viewer && <Navigation key={viewer.id} viewer={viewer} />}
-        <InstallDag visible={Boolean(viewer) && component === 'Dashboard'} />
+        {viewer && <Navigation key={viewer.id} viewer={viewer} installation={installation} />}
         {children}
     </div>;
 }

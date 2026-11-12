@@ -86,6 +86,35 @@ final class FamilyLoginTest extends TestCase
             ->where('viewer.id', $child->id)->where('viewer.name', $child->name)
             ->where('viewer.role', 'child')->where('viewer.relationship', null));
         $this->post('/guardian/children', $this->childData())->assertForbidden();
+        $this->get('/guardian/children')->assertForbidden();
+    }
+
+    public function test_children_page_lists_linked_profiles_and_modal_registration_redirects_back(): void
+    {
+        $this->travelTo(\Illuminate\Support\Carbon::parse('2026-11-12 02:30:00', 'UTC'));
+        $guardian = $this->guardian();
+        $this->actingAs($guardian)->withSession(['account_version' => $guardian->session_version]);
+        $index = '/guardian/children';
+        $registration = "{$index}?from=children";
+        $this->get($index)->assertInertia(fn (Assert $page) => $page->component('Children')->has('children', 0));
+
+        $data = [...$this->childData(), 'name' => 'Zeca', 'birth_date' => '2013-11-12'];
+        $this->post($registration, $data)->assertRedirect($index)->assertSessionHasNoErrors();
+        $this->post($registration, [...$data, 'name' => 'Ana', 'phone' => '+5571999994444'])
+            ->assertRedirect($index)->assertSessionHasNoErrors();
+        $this->post($registration, $data)->assertRedirect($index)->assertSessionHasErrors('phone');
+
+        $this->get($index)->assertInertia(fn (Assert $page) => $page->has('children', 2)
+            ->where('children.0.name', 'Ana')->where('children.1.name', 'Zeca')
+            ->where('children.1.age', 12)->where('children.1.birth_date', '2013-11-12')
+            ->where('children.1.phone', self::CHILD_PHONE)->missing('children.1.phone_hash'));
+
+        $other = User::create([
+            'family_id' => $guardian->family_id, 'name' => 'Outro responsável', 'role' => User::GUARDIAN,
+            'phone' => '+5571999995555', 'phone_hash' => Phone::fingerprint('+5571999995555'),
+        ])->refresh();
+        $this->actingAs($other)->withSession(['account_version' => $other->session_version])
+            ->get($index)->assertInertia(fn (Assert $page) => $page->has('children', 0));
     }
 
     public function test_unknown_phone_has_same_redirect_and_sends_nothing(): void

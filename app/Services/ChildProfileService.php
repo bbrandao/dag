@@ -7,6 +7,8 @@ use App\Repositories\FamilyRepository;
 use App\Repositories\MissionNoticeRepository;
 use App\Repositories\OtpRepository;
 use App\Support\Phone;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 
@@ -18,6 +20,24 @@ final class ChildProfileService
         private readonly MissionNoticeRepository $notices,
     ) {}
 
+    public function list(User $guardian): Collection
+    {
+        abort_unless($guardian->role === User::GUARDIAN, 403);
+        $today = CarbonImmutable::today($guardian->family->timezone);
+
+        return $this->families->childProfiles($guardian)->map(function (User $child) use ($today): array {
+            $birthDate = Crypt::decryptString($child->birth_date);
+            $birth = CarbonImmutable::parse($birthDate, $today->timezone);
+
+            return [
+                'id' => $child->id,
+                'name' => $child->name,
+                'birth_date' => $birthDate,
+                'age' => (int) $birth->diffInYears($today),
+                'phone' => $child->phone,
+            ];
+        });
+    }
     public function register(User $guardian, array $data): void
     {
         abort_unless($guardian->role === User::GUARDIAN, 403);

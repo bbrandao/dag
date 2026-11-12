@@ -5,15 +5,21 @@ interface InstallPrompt extends Event {
     userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+const installationNavigator = navigator as Navigator & {
+    getInstalledRelatedApps?: () => Promise<{ platform: string }[]>;
+};
+
 function installed() {
     return window.matchMedia('(display-mode: standalone)').matches
         || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 }
 
-export default function InstallDag({ visible }: { visible: boolean }) {
+export function useDagInstall() {
     const [isInstalled, setInstalled] = useState(installed);
     const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null);
     const [help, setHelp] = useState(false);
+    const [busy, setBusy] = useState(false);
+    const [checking, setChecking] = useState(() => !installed() && Boolean(installationNavigator.getInstalledRelatedApps));
 
     useEffect(() => {
         const capture = (event: Event) => {
@@ -21,20 +27,34 @@ export default function InstallDag({ visible }: { visible: boolean }) {
             setInstallPrompt(event as InstallPrompt);
         };
         const markInstalled = () => { setInstalled(true); setHelp(false); };
+        const mode = window.matchMedia('(display-mode: standalone)');
+        const checkMode = () => { if (installed()) markInstalled(); };
+        let current = true;
+        if (!installed() && installationNavigator.getInstalledRelatedApps) {
+            void installationNavigator.getInstalledRelatedApps().then(apps => {
+                if (current && apps.some(app => app.platform === 'webapp')) markInstalled();
+            }).catch(() => {}).finally(() => { if (current) setChecking(false); });
+        }
         window.addEventListener('beforeinstallprompt', capture);
         window.addEventListener('appinstalled', markInstalled);
+        mode.addEventListener('change', checkMode);
 
         return () => {
+            current = false;
             window.removeEventListener('beforeinstallprompt', capture);
             window.removeEventListener('appinstalled', markInstalled);
+            mode.removeEventListener('change', checkMode);
         };
     }, []);
 
     async function install() {
+        if (busy || checking || isInstalled) return;
         if (!installPrompt) {
             setHelp(value => !value);
             return;
         }
+        setBusy(true);
+        setHelp(false);
         try {
             await installPrompt.prompt();
             if ((await installPrompt.userChoice).outcome === 'accepted') setInstalled(true);
@@ -42,13 +62,9 @@ export default function InstallDag({ visible }: { visible: boolean }) {
             setHelp(true);
         } finally {
             setInstallPrompt(null);
+            setBusy(false);
         }
     }
 
-    if (!visible || isInstalled) return null;
-
-    return <aside aria-label="Instalação do DAG" className="mx-auto max-w-160 px-4 pt-3 text-right">
-        <button type="button" className="secondary" onClick={() => void install()}>Instalar DAG</button>
-        {help && <p>No iPhone, abra no Safari, toque em Compartilhar e em Adicionar à Tela de Início. Em outros aparelhos, procure Instalar ou Adicionar à tela inicial no menu do navegador.</p>}
-    </aside>;
+    return { isInstalled, busy: busy || checking, help, install };
 }

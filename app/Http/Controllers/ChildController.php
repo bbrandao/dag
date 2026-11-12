@@ -14,17 +14,25 @@ final class ChildController
 {
     public function __construct(private readonly ChildProfileService $profiles) {}
 
+    public function index(Request $request): Response
+    {
+        Inertia::encryptHistory();
+
+        return Inertia::render('Children', ['children' => $this->profiles->list($request->user())]);
+    }
+
     public function store(SaveChildRequest $request): RedirectResponse
     {
         $guardian = $request->user();
+        $destination = $this->destination($request);
 
         try {
             $this->profiles->register($guardian, $request->validated());
         } catch (UniqueConstraintViolationException) {
-            return redirect()->route('dashboard')->withErrors(['phone' => 'Não foi possível cadastrar esse WhatsApp. Confira o número ou fale com o responsável pela operação do DAG.']);
+            return redirect()->route($destination)->withErrors(['phone' => 'Não foi possível cadastrar esse WhatsApp. Confira o número ou fale com o responsável pela operação do DAG.']);
         }
 
-        return redirect()->route('dashboard');
+        return redirect()->route($destination);
     }
 
     public function edit(Request $request, string $child): Response
@@ -45,6 +53,11 @@ final class ChildController
                 ->withErrors(['phone' => 'Esse WhatsApp já está em uso. Informe outro número.']);
         }
 
-        return redirect()->route('dashboard');
+        return redirect()->route($this->destination($request));
+    }
+
+    private function destination(Request $request): string
+    {
+        return $request->query('from') === 'children' ? 'children.index' : 'dashboard';
     }
 }

@@ -8,7 +8,10 @@ export interface ChildProfile {
     phone: string;
 }
 
-export default function ChildProfileForm({ child }: { child?: ChildProfile }) {
+type FormProps = { child: ChildProfile; onCreated?: never; onFailure?: never; onCancel?: never }
+    | { child?: never; onCreated: () => void; onFailure: () => void; onCancel: () => void };
+
+export default function ChildProfileForm({ child, onCreated, onFailure, onCancel }: FormProps) {
     const form = useForm({
         name: child?.name ?? '',
         birth_date: child?.birth_date ?? '',
@@ -19,16 +22,23 @@ export default function ChildProfileForm({ child }: { child?: ChildProfile }) {
     function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (child) {
-            form.patch(`/guardian/children/${child.id}`);
+            form.patch(`/guardian/children/${child.id}?from=children`);
         } else {
-            form.post('/guardian/children', { onSuccess: () => form.reset() });
+            const handleFailure = () => { onFailure(); return false as const; };
+            form.post('/guardian/children?from=children', {
+                preserveScroll: true,
+                onSuccess: onCreated,
+                onError: onFailure,
+                onHttpException: handleFailure,
+                onNetworkError: handleFailure,
+            });
         }
     }
 
     return (
-        <form onSubmit={save}>
+        <form onSubmit={save} aria-busy={form.processing}>
             <label htmlFor="child-name">Nome</label>
-            <input id="child-name" required maxLength={120} value={form.data.name}
+            <input id="child-name" autoFocus={!child} required maxLength={120} value={form.data.name}
                 aria-describedby="name-error" aria-invalid={Boolean(form.errors.name)}
                 onChange={event => form.setData('name', event.target.value)} />
             <p id="name-error" className="error" role="alert">{form.errors.name}</p>
@@ -55,8 +65,9 @@ export default function ChildProfileForm({ child }: { child?: ChildProfile }) {
                 </>
             )}
             <button type="submit" disabled={form.processing}>{child ? 'Salvar alterações' : 'Cadastrar perfil'}</button>
-            {child && <Link className="button secondary" href="/app">Cancelar</Link>}
-            {!child && form.recentlySuccessful && <p role="status">Perfil cadastrado.</p>}
+            {child
+                ? <Link className="button secondary" href="/guardian/children">Cancelar</Link>
+                : <button type="button" className="secondary" disabled={form.processing} onClick={onCancel}>Cancelar</button>}
         </form>
     );
 }

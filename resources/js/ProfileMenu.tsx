@@ -1,13 +1,14 @@
-import { router, useForm } from '@inertiajs/react';
-import { Check, CircleAlert, LogOut } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { Link, router, useForm } from '@inertiajs/react';
+import { Download, LogOut, Users } from 'lucide-react';
+import { useState } from 'react';
 import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
 import { Switch } from './components/ui/switch';
+import { Toast, useToast } from './components/ui/toast';
 import { requestPreference } from './requestPreference';
+import type { useDagInstall } from './useDagInstall';
 import { usePushPreferences } from './usePushPreferences';
 
 export interface Viewer {
@@ -26,8 +27,9 @@ function initials(name: string) {
     return `${first}${last}`.toLocaleUpperCase('pt-BR');
 }
 
-export function ProfileMenu({ viewer, side, open, onOpenChange }: {
+export function ProfileMenu({ viewer, installation, side, open, onOpenChange }: {
     viewer: Viewer;
+    installation: ReturnType<typeof useDagInstall>;
     side: 'top' | 'bottom';
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -35,14 +37,8 @@ export function ProfileMenu({ viewer, side, open, onOpenChange }: {
     const notifications = usePushPreferences(viewer.pushPublicKey);
     const logout = useForm({});
     const [saving, setSaving] = useState(false);
-    const [toast, setToast] = useState<{ success: boolean; text: string } | null>(null);
+    const { toast, setToast } = useToast();
     const role = viewer.role === 'child' ? 'Criança' : viewer.relationship || 'Responsável';
-
-    useEffect(() => {
-        if (!toast) return;
-        const timeout = window.setTimeout(() => setToast(null), 3500);
-        return () => window.clearTimeout(timeout);
-    }, [toast]);
 
     async function toggleWhatsApp() {
         if (saving) return;
@@ -76,6 +72,14 @@ export function ProfileMenu({ viewer, side, open, onOpenChange }: {
                     <Badge className="bg-dag-lilac px-2 py-1 capitalize">{role}</Badge>
                 </div>
                 <hr className="my-2 border-0 border-t border-solid border-dag-line" />
+                {viewer.role === 'guardian' && <>
+                    <Button asChild className="w-full justify-start bg-white hover:bg-dag-lilac">
+                        <Link href="/guardian/children" onClick={() => onOpenChange(false)}>
+                            <Users aria-hidden="true" size={17} /> Filhos
+                        </Link>
+                    </Button>
+                    <hr className="my-2 border-0 border-t border-solid border-dag-line" />
+                </>}
                 <Switch checked={notifications.enabled} disabled={!notifications.available || notifications.busy || logout.processing}
                     aria-describedby="dag-push-hint" onClick={() => { void notifications.toggle(); }}>
                     Notificações
@@ -86,21 +90,23 @@ export function ProfileMenu({ viewer, side, open, onOpenChange }: {
                 <Switch checked={viewer.whatsappNotices} disabled={saving || logout.processing} aria-busy={saving}
                     onClick={() => { void toggleWhatsApp(); }}>Avisos no WhatsApp</Switch>
                 <hr className="my-2 border-0 border-t border-solid border-dag-line" />
+                <Button type="button" disabled={installation.isInstalled || installation.busy}
+                    className="w-full cursor-pointer justify-start bg-white hover:bg-dag-lilac disabled:cursor-default"
+                    aria-describedby={installation.isInstalled || installation.help ? 'dag-install-hint' : undefined}
+                    onClick={() => { void installation.install(); }}>
+                    <Download aria-hidden="true" size={17} /> Instalar DAG
+                </Button>
+                {installation.isInstalled && <div id="dag-install-hint" className="px-3 pb-1 text-xs text-dag-muted">Já instalado</div>}
+                {installation.help && <div id="dag-install-hint" role="status" className="px-3 pb-1 text-xs text-dag-muted">
+                    No iPhone, abra no Safari e toque em Compartilhar e depois em Adicionar à Tela de Início. Nos outros aparelhos, procure Instalar ou Adicionar à tela inicial no menu do navegador.
+                </div>}
+                <hr className="my-2 border-0 border-t border-solid border-dag-line" />
                 <Button type="button" disabled={logout.processing || saving} className="w-full cursor-pointer justify-start bg-white text-red-800 hover:bg-red-50"
                     onClick={() => logout.post('/logout')}>
                     <LogOut aria-hidden="true" size={17} /> Sair
                 </Button>
             </PopoverContent>
         </Popover>
-        {toast && createPortal(
-            <div className="pointer-events-none fixed inset-0 z-60 grid place-items-center px-5">
-                <div role={toast.success ? 'status' : 'alert'} className={`flex max-w-sm items-center gap-3 rounded-xl border border-solid px-4 py-3 text-sm font-bold shadow-xl ${
-                    toast.success ? 'border-green-200 bg-green-50 text-green-900' : 'border-red-200 bg-red-50 text-red-900'
-                }`}>
-                    {toast.success ? <Check aria-hidden="true" className="size-5 shrink-0" /> : <CircleAlert aria-hidden="true" className="size-5 shrink-0" />}
-                    {toast.text}
-                </div>
-            </div>, document.body,
-        )}
+        <Toast message={toast} />
     </>;
 }
