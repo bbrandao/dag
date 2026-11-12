@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#fff9ee">
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" type="image/png" href="/icons/dag-192.png">

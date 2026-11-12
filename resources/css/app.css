@@ -32,12 +32,13 @@ h1 { font-size: clamp(1.8rem, 6vw, 2.5rem); }
 .status-expired { --mission-surface: #fff3ef; --mission-accent: #c16a57; --mission-badge: #f9d5cc; --mission-ink: #78271e; }
 form { display: grid; gap: .45rem; }
 label { font-weight: 650; }
-input, button, textarea, select { font: inherit; min-width: 0; }
+input, button:not([data-slot="button"]), textarea, select { font: inherit; min-width: 0; }
+button[data-slot="button"] { font-family: inherit; }
 input:not([type="checkbox"]), textarea, select { width: 100%; min-height: 46px; border: 1px solid #7c678d; border-radius: .65rem; padding: .65rem; color: inherit; background: #fff; }
 textarea { resize: vertical; }
 .check { display: flex; align-items: center; gap: .65rem; min-height: 44px; }
 .check input { width: 1.2rem; height: 1.2rem; flex: none; accent-color: #5b35c9; }
-button, .button { min-height: 44px; border: 1px solid transparent; border-radius: .65rem; background: #5b35c9; color: #fff; font-weight: 750; padding: .6rem .9rem; cursor: pointer; }
+button:not([data-slot="button"]), .button { min-height: 44px; border: 1px solid transparent; border-radius: .65rem; background: #5b35c9; color: #fff; font-weight: 750; padding: .6rem .9rem; cursor: pointer; }
 .button { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 button.secondary, .button.secondary { background: #f1e9ff; color: #452497; }
 button:disabled { opacity: .65; cursor: wait; }
@@ -58,9 +59,6 @@ button:disabled { opacity: .65; cursor: wait; }
 .table-scroll { overflow-x: auto; }
 .table-scroll table { width: 100%; border-collapse: collapse; }
 .table-scroll th, .table-scroll td { padding: .55rem; border-bottom: 1px solid #e4d8ef; text-align: left; }
-.pwa-bar { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; max-width: 40rem; margin: auto; padding: .65rem 1rem 0; }
-.pwa-bar a { color: #452497; font-weight: 700; }
-.pwa-bar p { flex-basis: 100%; margin: 0; }
 .dashboard-metrics { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr)); }
 .dashboard-metrics div { padding: .55rem; border-radius: .65rem; background: #fff9ee; }
 .dashboard-metrics dt { font-size: .85rem; }

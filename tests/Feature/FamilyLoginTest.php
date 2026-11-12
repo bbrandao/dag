@@ -49,8 +49,11 @@ final class FamilyLoginTest extends TestCase
     public function test_guardian_registers_child_and_child_signs_in_with_own_code(): void
     {
         $guardian = $this->guardian();
+        $this->get('/login')->assertInertia(fn (Assert $page) => $page->component('Login')->where('viewer', null));
+        $this->getJson('/app/avisos/resumo')->assertUnauthorized();
         $this->post('/auth/otp', ['phone' => self::GUARDIAN_PHONE])->assertRedirect('/login');
         $code = $this->sentCode(self::GUARDIAN_PHONE);
+        $this->get('/login')->assertInertia(fn (Assert $page) => $page->where('awaitingCode', true)->where('viewer', null));
         $this->assertDatabaseMissing('otp_challenges', ['digest' => $code]);
         $this->post('/auth/otp/verify', ['code' => $code])->assertRedirect('/app')
             ->assertCookieMissing(Auth::guard('web')->getRecallerName());
@@ -62,14 +65,16 @@ final class FamilyLoginTest extends TestCase
         $this->assertNotSame(self::CHILD_PHONE, $child->getRawOriginal('phone'));
         $this->assertDatabaseMissing('children', ['birth_date' => '2013-01-01']);
         $this->get('/app')->assertInertia(fn (Assert $page) => $page->component('Dashboard')
-            ->where('role', 'guardian')->where('children.0.id', $child->id));
+            ->where('role', 'guardian')->where('children.0.id', $child->id)
+            ->where('viewer', ['id' => $guardian->id, 'name' => $guardian->name]));
 
         $this->post('/logout')->assertRedirect('/login');
         $this->post('/auth/otp', ['phone' => self::CHILD_PHONE, 'permission' => true])->assertRedirect('/login');
         $this->post('/auth/otp/verify', ['code' => $this->sentCode(self::CHILD_PHONE)])->assertRedirect('/app');
         $this->assertAuthenticatedAs($child);
         $this->get('/app')->assertInertia(fn (Assert $page) => $page->component('Dashboard')
-            ->where('role', 'child')->has('children', 0));
+            ->where('role', 'child')->has('children', 0)
+            ->where('viewer', ['id' => $child->id, 'name' => $child->name]));
         $this->post('/guardian/children', $this->childData())->assertForbidden();
     }
 

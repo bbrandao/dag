@@ -43,10 +43,9 @@ export default function Dashboard({ name, role, family, children, whatsappNotice
     return (
         <main className="screen">
             <Head title={isGuardian ? 'Família' : 'Meu espaço'} />
-            <header className="topbar">
-                <p className="brand"><span aria-hidden="true">✓</span> Do And Gain</p>
+            <div className="mb-4 flex justify-end">
                 <button type="button" className="secondary" onClick={() => router.post('/logout')}>Sair</button>
-            </header>
+            </div>
             <section className="card">
                 <p className="tag">{isGuardian ? 'Responsável' : 'Meu espaço'}</p>
                 <h1>Olá, {name}!</h1>

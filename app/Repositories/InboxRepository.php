@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Models\User;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Pagination\CursorPaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -20,15 +21,32 @@ final class InboxRepository
 
     public function recent(User $user): Collection
     {
-        $field = $user->role === User::GUARDIAN ? 'submitted_at' : 'reviewed_at';
-        return $this->events($user)->latest("attempts.{$field}")->latest('attempts.id')
-            ->limit(self::LIMIT)->get(['attempts.id', 'mission.id as mission_id', 'mission.title', 'attempts.decision',
-                "attempts.{$field} as occurred_at", 'reads.user_id as read_by']);
+        return $this->orderedEvents($user, false)->limit(self::LIMIT)->get();
+    }
+
+    public function unreadPreview(User $user): Collection
+    {
+        return $this->orderedEvents($user, true)->selectRaw('count(*) over () as unread_total')->limit(self::LIMIT)->get();
+    }
+
+    public function unreadPage(User $user): CursorPaginator
+    {
+        return $this->orderedEvents($user, true)->cursorPaginate(15)->appends(['filter' => 'unread']);
     }
 
     public function unread(User $user): int
     {
-        return $this->recent($user)->whereNull('read_by')->count();
+        return $this->events($user)->whereNull('reads.user_id')->count();
+    }
+
+    private function orderedEvents(User $user, bool $unreadOnly): Builder
+    {
+        $field = $user->role === User::GUARDIAN ? 'submitted_at' : 'reviewed_at';
+
+        return $this->events($user)->when($unreadOnly, fn (Builder $query) => $query->whereNull('reads.user_id'))
+            ->select(['attempts.id as id', 'mission.id as mission_id', 'mission.title', 'attempts.decision',
+                "attempts.{$field} as occurred_at", 'reads.user_id as read_by'])
+            ->latest('occurred_at')->latest('id');
     }
 
     public function markRead(User $user, array $submissions): void

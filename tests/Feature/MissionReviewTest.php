@@ -238,11 +238,11 @@ final class MissionReviewTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_inbox_shows_only_the_five_latest_notices_even_when_some_were_read(): void
+    public function test_notice_summary_caps_the_preview_and_the_inbox_paginates_unread_notices(): void
     {
         [$guardian, $child, $mission] = $this->mission('disabled');
         $missions = [$mission];
-        for ($index = 2; $index <= 6; $index++) {
+        for ($index = 2; $index <= 17; $index++) {
             $title = "Missão {$index}";
             $this->post('/guardian/tasks', [
                 'title' => $title, 'criteria' => 'Concluir atividade.', 'points' => 1,
@@ -258,8 +258,9 @@ final class MissionReviewTest extends TestCase
                 ->assertSessionHasNoErrors();
         }
         $this->as($guardian)->get('/app/avisos')->assertInertia(fn (Assert $page) => $page
-            ->has('events', 5)->where('events.0.title', 'Missão 6')->where('events.4.title', 'Missão 2'));
-        $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 5]);
+            ->has('events', 5)->where('events.0.title', 'Missão 17')->where('events.4.title', 'Missão 13'));
+        $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 17]);
+        $this->getJson('/app/avisos/resumo')->assertOk()->assertJsonPath('unread', 17)->assertJsonCount(5, 'events');
 
         foreach ($missions as $mission) {
             $this->travel(1)->minutes();
@@ -267,10 +268,21 @@ final class MissionReviewTest extends TestCase
             $this->post("/guardian/revisoes/{$mission}", ['submission_id' => $submission, 'decision' => 'approved'])
                 ->assertSessionHasNoErrors();
         }
-        $this->as($child)->patch('/app/avisos/lidos', ['ids' => [$submission]])->assertRedirect('/app/avisos');
+        $this->as($child)->patchJson('/app/avisos/lidos', ['ids' => [$submission]])->assertNoContent();
         $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->has('events', 5)
-            ->where('events.0.id', $submission)->where('events.0.unread', false)->where('events.4.title', 'Missão 2'));
-        $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 4]);
+            ->where('events.0.id', $submission)->where('events.0.unread', false)->where('events.4.title', 'Missão 13'));
+        $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 16]);
+        $this->getJson('/app/avisos/resumo')->assertOk()->assertJsonPath('unread', 16)->assertJsonCount(5, 'events')
+            ->assertJsonPath('events.0.title', 'Missão 16')->assertJsonPath('events.4.title', 'Missão 12');
+        $this->get('/app/avisos?filter=unread')->assertInertia(fn (Assert $page) => $page
+            ->where('unreadOnly', true)->where('noticeSummary.unread', 16)->has('events', 15)
+            ->where('events.14.title', 'Missão 2')->where('pagination.previous', null)
+            ->where('pagination.next', function (string $next) {
+                $this->get($next)->assertInertia(fn (Assert $page) => $page
+                    ->has('events', 1)->where('events.0.title', 'Arrumar a cama')->where('pagination.next', null));
+
+                return true;
+            }));
     }
 
     private function mission(string $photoMode): array

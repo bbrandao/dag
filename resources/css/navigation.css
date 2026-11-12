@@ -1,0 +1,18 @@
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme {
+    --color-dag-ink: #251637;
+    --color-dag-muted: #645470;
+    --color-dag-line: #e4d8ef;
+    --color-dag-purple: #5b35c9;
+    --color-dag-lilac: #f1e9ff;
+    --color-dag-gold: #ffd45c;
+}
+
+@media (width < 48rem) {
+    .dag-authenticated {
+        padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+    }
+}

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\InboxService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -17,7 +18,16 @@ final class InboxController
     {
         Inertia::encryptHistory();
 
-        return Inertia::render('Inbox', ['events' => $this->inbox->events($request->user())]);
+        $user = $request->user();
+        $unreadOnly = $request->query('filter') === 'unread';
+        $page = $unreadOnly ? $this->inbox->unreadPage($user) : null;
+
+        return Inertia::render('Inbox', [
+            'events' => fn () => $page['events'] ?? $this->inbox->events($user),
+            'pagination' => ['previous' => $page['previous'] ?? null, 'next' => $page['next'] ?? null],
+            'noticeSummary' => fn () => $this->inbox->summary($user),
+            'unreadOnly' => $unreadOnly,
+        ]);
     }
 
     public function count(Request $request): JsonResponse
@@ -25,11 +35,23 @@ final class InboxController
         return response()->json(['unread' => $this->inbox->unread($request->user())], headers: ['Cache-Control' => 'private, no-store']);
     }
 
-    public function read(Request $request): RedirectResponse
+    public function summary(Request $request): JsonResponse
     {
-        $data = $request->validate(['ids' => ['required', 'array', 'max:30'], 'ids.*' => ['required', 'uuid']]);
+        return response()->json($this->inbox->summary($request->user()), headers: ['Cache-Control' => 'private, no-store']);
+    }
+
+    public function read(Request $request): RedirectResponse|HttpResponse
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'max:30'], 'ids.*' => ['required', 'uuid'],
+            'filter' => ['nullable', 'in:unread'],
+        ]);
         $this->inbox->markRead($request->user(), $data['ids']);
 
-        return redirect()->route('inbox');
+        if ($request->expectsJson()) {
+            return response()->noContent(headers: ['Cache-Control' => 'private, no-store']);
+        }
+
+        return redirect()->route('inbox', isset($data['filter']) ? ['filter' => $data['filter']] : []);
     }
 }

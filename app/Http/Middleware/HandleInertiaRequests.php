@@ -13,7 +13,11 @@ class HandleInertiaRequests extends Middleware
 
     public function share(Request $request): array
     {
-        return [...parent::share($request), 'authenticated' => fn () => $request->user() !== null];
+        return [
+            ...parent::share($request),
+            'authenticated' => fn () => $request->user() !== null,
+            'viewer' => fn () => $request->user()?->only(['id', 'name']),
+        ];
     }
 
     public function handle(Request $request, Closure $next): Response
