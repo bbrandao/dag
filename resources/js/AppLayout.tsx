@@ -1,22 +1,15 @@
 import { Link, usePage } from '@inertiajs/react';
 import { Bell } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
 import { openNotice } from './notices';
 import InstallDag from './InstallDag';
+import { ProfileMenu, type Viewer } from './ProfileMenu';
 import { useNoticeSummary } from './useNoticeSummary';
 
-function initials(name: string) {
-    const parts = name.trim().split(/\s+/);
-    const first = Array.from(parts[0])[0] ?? '';
-    const last = parts.length > 1 ? Array.from(parts[parts.length - 1])[0] ?? '' : '';
-    return `${first}${last}`.toLocaleUpperCase('pt-BR');
-}
-
-function Navigation({ name }: { name: string }) {
+function Navigation({ viewer }: { viewer: Viewer }) {
     const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 48rem)').matches);
     const [panel, setPanel] = useState<'notices' | 'profile' | null>(null);
     const { summary, failed, refresh } = useNoticeSummary();
@@ -74,29 +67,20 @@ function Navigation({ name }: { name: string }) {
                         </div>
                     </PopoverContent>
                 </Popover>
-                <Popover open={panel === 'profile'} onOpenChange={open => {
+                <ProfileMenu viewer={viewer} side={side} open={panel === 'profile'} onOpenChange={open => {
                     setPanel(current => open ? 'profile' : current === 'profile' ? null : current);
-                }}>
-                    <PopoverTrigger asChild>
-                        <Button type="button" aria-label={`Perfil de ${name}`} className="size-11 cursor-pointer bg-white px-0">
-                            <Avatar aria-hidden="true"><AvatarFallback>{initials(name)}</AvatarFallback></Avatar>
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent side={side} aria-label="Perfil" className="w-52">
-                        <div className="text-sm font-bold wrap-anywhere">{name}</div>
-                    </PopoverContent>
-                </Popover>
+                }} />
             </div>
         </nav>
     </Bar>;
 }
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-    const { component, props } = usePage<{ viewer?: { id: string; name: string } | null }>();
+    const { component, props } = usePage<{ viewer?: Viewer | null }>();
     const viewer = props.viewer;
 
     return <div className={viewer ? 'dag-authenticated' : undefined}>
-        {viewer && <Navigation key={viewer.id} name={viewer.name} />}
+        {viewer && <Navigation key={viewer.id} viewer={viewer} />}
         <InstallDag visible={Boolean(viewer) && component === 'Dashboard'} />
         {children}
     </div>;

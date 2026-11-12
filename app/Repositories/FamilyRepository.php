@@ -81,10 +81,18 @@ final class FamilyRepository
         DB::table('children')->where('user_id', $child->id)->update(['birth_date' => $encryptedBirthDate]);
     }
 
-    public function setNoticePreference(User $user, bool $enabled): void
+    public function setNoticePreference(User $user, bool $enabled): bool
     {
-        User::whereKey($user->id)->where('active', true)->where('session_version', $user->session_version)
+        $updated = User::whereKey($user->id)->where('active', true)->where('session_version', $user->session_version)
             ->update(['whatsapp_notices' => $enabled]);
+
+        if ($updated !== 1) {
+            return false;
+        }
+
+        $user->setAttribute('whatsapp_notices', $enabled)->syncOriginalAttribute('whatsapp_notices');
+
+        return true;
     }
 
     public function audit(User $subject, string $event, ?User $actor = null): void

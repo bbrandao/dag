@@ -1,6 +1,6 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import ChildProfileForm from './ChildProfileForm';
-import PushPreferences from '../PushPreferences';
+import { Badge } from '../components/ui/badge';
 import { MissionCard, type MissionSummary } from '../MissionCard';
 
 const reais = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -22,34 +22,25 @@ interface Progress {
 }
 
 interface DashboardProps {
-    name: string;
     role: 'guardian' | 'child';
     family: string;
     children: { id: string; name: string }[];
-    whatsappNotices: boolean;
     earnedPoints: number;
     monthLabel: string;
     rateCents: number | null;
     progress: Progress[];
-    pushPublicKey: string | null;
     childMissions: { missions: MissionSummary[]; today: string } | null;
 }
 
-export default function Dashboard({ name, role, family, children, whatsappNotices, earnedPoints, monthLabel, rateCents, progress, childMissions, pushPublicKey }: DashboardProps) {
-    const notices = useForm({ enabled: whatsappNotices });
+export default function Dashboard({ role, family, children, earnedPoints, monthLabel, rateCents, progress, childMissions }: DashboardProps) {
     const isGuardian = role === 'guardian';
     const firstChild = children[0];
 
     return (
         <main className="screen">
             <Head title={isGuardian ? 'Família' : 'Meu espaço'} />
-            <div className="mb-4 flex justify-end">
-                <button type="button" className="secondary" onClick={() => router.post('/logout')}>Sair</button>
-            </div>
+            <h1><Badge className="bg-dag-lilac px-3 py-1.5 text-sm leading-snug wrap-anywhere">{family}</Badge></h1>
             <section className="card">
-                <p className="tag">{isGuardian ? 'Responsável' : 'Meu espaço'}</p>
-                <h1>Olá, {name}!</h1>
-                <p>{isGuardian ? family : 'Você entrou no seu perfil.'}</p>
                 {!isGuardian && <p className="tag reward">{earnedPoints} pontos conquistados</p>}
                 <div className="filters">
                     <Link className="button" href={isGuardian ? '/guardian/tasks' : '/app/missoes'}>
@@ -107,19 +98,6 @@ export default function Dashboard({ name, role, family, children, whatsappNotice
                     );
                 })}
             </section>
-            <section className="card">
-                <h2>Avisos</h2>
-                <form onSubmit={event => { event.preventDefault(); notices.patch('/app/avisos'); }}>
-                    <label className="check">
-                        <input type="checkbox" checked={notices.data.enabled}
-                            onChange={event => notices.setData('enabled', event.target.checked)} />
-                        {isGuardian ? 'Avisar pelo WhatsApp quando houver uma entrega' : 'Receber o resultado da revisão pelo WhatsApp'}
-                    </label>
-                    <button type="submit" disabled={notices.processing || notices.data.enabled === whatsappNotices}>Salvar preferência</button>
-                    {notices.recentlySuccessful && <p role="status">Preferência salva.</p>}
-                </form>
-            </section>
-            {pushPublicKey && <PushPreferences publicKey={pushPublicKey} guardian={isGuardian} />}
             {isGuardian && (
                 <section className="card" aria-labelledby="children-title">
                     <h2 id="children-title">Filhos vinculados</h2>

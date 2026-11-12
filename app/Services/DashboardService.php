@@ -72,8 +72,8 @@ final class DashboardService
         });
     }
 
-    public function updateNotices(User $user, bool $enabled): void
+    public function updateNotices(User $user, bool $enabled): bool
     {
-        $this->families->setNoticePreference($user, $enabled);
+        return $this->families->setNoticePreference($user, $enabled);
     }
 }

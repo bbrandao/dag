@@ -66,7 +66,16 @@ final class FamilyLoginTest extends TestCase
         $this->assertDatabaseMissing('children', ['birth_date' => '2013-01-01']);
         $this->get('/app')->assertInertia(fn (Assert $page) => $page->component('Dashboard')
             ->where('role', 'guardian')->where('children.0.id', $child->id)
-            ->where('viewer', ['id' => $guardian->id, 'name' => $guardian->name]));
+            ->where('viewer.id', $guardian->id)->where('viewer.name', $guardian->name)
+            ->where('viewer.role', 'guardian')->where('viewer.relationship', $guardian->relationship)
+            ->missing('viewer.phone')->missing('viewer.phone_hash'));
+
+        $this->patchJson('/app/avisos', ['enabled' => true])->assertExactJson(['enabled' => true]);
+        $this->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page->where('viewer.whatsappNotices', true));
+        $this->patchJson('/app/avisos', ['enabled' => 'inválido'])->assertUnprocessable();
+        $this->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page->where('viewer.whatsappNotices', true));
+        $this->patchJson('/app/avisos', ['enabled' => false])->assertExactJson(['enabled' => false]);
+        $this->assertFalse((bool) $guardian->fresh()->whatsapp_notices);
 
         $this->post('/logout')->assertRedirect('/login');
         $this->post('/auth/otp', ['phone' => self::CHILD_PHONE, 'permission' => true])->assertRedirect('/login');
@@ -74,7 +83,8 @@ final class FamilyLoginTest extends TestCase
         $this->assertAuthenticatedAs($child);
         $this->get('/app')->assertInertia(fn (Assert $page) => $page->component('Dashboard')
             ->where('role', 'child')->has('children', 0)
-            ->where('viewer', ['id' => $child->id, 'name' => $child->name]));
+            ->where('viewer.id', $child->id)->where('viewer.name', $child->name)
+            ->where('viewer.role', 'child')->where('viewer.relationship', null));
         $this->post('/guardian/children', $this->childData())->assertForbidden();
     }
 
