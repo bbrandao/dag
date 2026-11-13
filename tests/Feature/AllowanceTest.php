@@ -42,10 +42,11 @@ final class AllowanceTest extends TestCase
         $this->approve($guardian, $child, $open);
         $this->assertDatabaseHas('point_credits', ['occurrence_id' => $open, 'amount_cents' => 100]);
 
-        $this->post("{$url}/fechar", $preview)->assertSessionHasErrors('fingerprint');
+        $this->postJson("{$url}/fechar", $preview)->assertConflict()
+            ->assertJsonPath('message', 'O saldo mudou. Confira os valores e confirme novamente.');
         $this->assertDatabaseCount('payouts', 0);
         $preview = $this->get($url)->viewData('page')['props']['preview'];
-        $this->post("{$url}/fechar", $preview)->assertRedirect($url)->assertSessionHasNoErrors();
+        $this->postJson("{$url}/fechar", $preview)->assertExactJson(['closed' => true]);
         $this->post("{$url}/fechar", $preview)->assertRedirect($url)->assertSessionHasNoErrors();
         $this->assertDatabaseCount('payouts', 1);
         $payout = DB::table('payouts')->first();

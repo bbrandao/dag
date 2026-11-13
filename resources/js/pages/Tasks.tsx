@@ -109,7 +109,7 @@ export default function Tasks({ tasks, children }: Pick<TaskFormData, 'children'
         </p>}
         <section aria-label="Tarefas cadastradas" aria-busy={refreshing}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <Badge className="px-3 py-1.5" aria-live="polite">
+                <Badge className="bg-[#164875] px-3 py-1.5 text-white" aria-live="polite">
                     {pointsFormat.format(filtered.length)} {filtered.length === 1 ? 'tarefa' : 'tarefas'}
                 </Badge>
                 <Badge className="px-3 py-1.5" aria-live="polite">{pointsFormat.format(total)} {pointsLabel}</Badge>

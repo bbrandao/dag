@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\SavePointRateRequest;
 use App\Services\AllowanceLedger;
 use App\Services\AllowanceOverview;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -29,14 +30,20 @@ final class AllowanceController
         return redirect()->route('allowance.guardian', $child);
     }
 
-    public function close(Request $request, AllowanceLedger $ledger, string $child): RedirectResponse
+    public function close(Request $request, AllowanceLedger $ledger, string $child): RedirectResponse|JsonResponse
     {
         $profile = $this->overview->linkedChild($request->user(), $child);
         $data = $request->validate(['request_id' => ['required', 'uuid'], 'fingerprint' => ['required', 'regex:/^[0-9a-f]{64}$/D']]);
         $account = $ledger->manual($profile, $request->user(), $data['request_id'], $data['fingerprint']);
+        $message = 'O saldo mudou. Confira os valores e confirme novamente.';
+        if ($request->expectsJson()) {
+            return $account
+                ? response()->json(['closed' => true])
+                : response()->json(['message' => $message], 409);
+        }
         $redirect = redirect()->route('allowance.guardian', $child);
 
-        return $account ? $redirect : $redirect->withErrors(['fingerprint' => 'O saldo mudou. Confira os valores e confirme novamente.']);
+        return $account ? $redirect : $redirect->withErrors(['fingerprint' => $message]);
     }
 
     public function pay(Request $request, AllowanceLedger $ledger, string $child, string $payout): RedirectResponse

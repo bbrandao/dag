@@ -1,9 +1,11 @@
-import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, ChevronDown } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { Head, Link, router, useForm, useHttp } from '@inertiajs/react';
+import { HttpResponseError } from '@inertiajs/core';
+import { ArrowLeft, ChevronDown, LoaderCircle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
+import { Toast, useToast } from '../components/ui/toast';
 import { money } from '../money';
 import { nameInitials } from '../tasks';
 
@@ -30,9 +32,9 @@ function PointEntries({ credits, empty, statement = false }: { credits: Allowanc
     if (credits.length === 0) return <p>{empty}</p>;
 
     if (statement) {
-        return <div className="divide-y divide-solid divide-dag-line">
+        return <div>
             {credits.map(credit => (
-                <article className="grid gap-1 py-3 first:pt-0 last:pb-0" key={credit.id}>
+                <article className="grid gap-1 border-x-0 border-b-0 border-t border-solid border-dag-line py-3 first:border-t-0 first:pt-0 last:pb-0" key={credit.id}>
                     <div className="text-sm text-dag-muted">
                         {credit.completed_at ?? `Aprovada em ${credit.approved_at}`}
                     </div>
@@ -73,9 +75,15 @@ interface AllowanceProps {
 export default function Allowance(props: AllowanceProps) {
     const { child, isGuardian, rates, preview, payouts, months, credits } = props;
     const endpoint = `/guardian/mesadas/${child.id}`;
-    const closing = useForm({ request_id: '', fingerprint: '' });
+    const closing = useHttp<{ request_id: string; fingerprint: string }, { closed: boolean }>({ request_id: '', fingerprint: '' });
     const payment = useForm({});
     const statement = useRef<HTMLDialogElement>(null);
+    const confirmation = useRef<HTMLDialogElement>(null);
+    const { toast, setToast } = useToast();
+    const [closed, setClosed] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    const [refreshFailed, setRefreshFailed] = useState(false);
+    const [stale, setStale] = useState(false);
     const largestMonth = Math.max(1, ...months.map(month => month.points));
 
     useEffect(() => {
@@ -85,10 +93,36 @@ export default function Allowance(props: AllowanceProps) {
         target?.scrollIntoView();
     }, [isGuardian]);
 
-    function close() {
-        if (!preview || !window.confirm(`Gerar mesada de ${money(preview.amount_cents)} com ${preview.points} pontos?`)) return;
+    function refreshAllowance() {
+        if (refreshing) return;
+        setClosed(false);
+        setRefreshing(true);
+        setRefreshFailed(false);
+        const onFailure = () => { setRefreshFailed(true); return false as const; };
+        router.reload({
+            only: ['availablePoints', 'availableCents', 'unpriced', 'pendingCents', 'paidCents', 'preview', 'months', 'credits', 'payouts'],
+            onSuccess: () => { setStale(false); },
+            onHttpException: onFailure, onNetworkError: onFailure, onError: onFailure, onCancel: onFailure,
+            onFinish: () => setRefreshing(false),
+        });
+    }
+
+    async function close() {
+        if (!preview || closing.processing || stale) return;
+        setToast(null);
         closing.transform(() => ({ request_id: preview.request_id, fingerprint: preview.fingerprint }));
-        closing.post(`${endpoint}/fechar`, { preserveScroll: true });
+        try {
+            const result = await closing.post(`${endpoint}/fechar`);
+            if (!result.closed) throw new Error('Fechamento não confirmado');
+            confirmation.current?.close();
+            setClosed(true);
+        } catch (error) {
+            const balanceChanged = error instanceof HttpResponseError && error.response.status === 409;
+            setStale(balanceChanged);
+            setToast({ success: false, text: balanceChanged
+                ? 'O saldo mudou. Atualize os valores para confirmar novamente.'
+                : 'Não foi possível encerrar o ciclo. Tente novamente.' });
+        }
     }
 
     return (
@@ -125,21 +159,22 @@ export default function Allowance(props: AllowanceProps) {
                 <section className="card" id="fechamento">
                     <h2>Encerrar ciclo de mesada</h2>
                     <p>Na virada do mês, o DAG fecha automaticamente o saldo do mês anterior. Você também pode fechar o saldo do mês atual.</p>
-                    {preview ? (
-                        <div className="mb-4 flex flex-wrap gap-2" aria-label="Saldo a encerrar">
-                            <PointsBadge points={preview.points} />
-                            <ValueBadge cents={preview.amount_cents} />
-                        </div>
-                    ) : (
+                    {!preview && (
                         <p>{rates.length === 0
                             ? <>Defina o <Link href="/guardian/configuracoes">valor do ponto em Configurações</Link> para fechar a mesada.</>
                             : 'O ciclo fica disponível quando houver pontos aprovados do mês atual fora de uma mesada.'}</p>
                     )}
                     <div className="flex flex-wrap gap-2">
-                        {preview && <button type="button" disabled={closing.processing} onClick={close}>Encerrar ciclo e gerar conta</button>}
-                        <Button type="button" className="cursor-pointer" onClick={() => statement.current?.showModal()}>Ver extrato</Button>
+                        {preview && <button type="button" disabled={closed || refreshing || refreshFailed}
+                            onClick={() => { setToast(null); confirmation.current?.showModal(); }}>Encerrar ciclo e gerar conta</button>}
+                        <Button type="button" className="cursor-pointer" disabled={closed || refreshing || refreshFailed}
+                            onClick={() => statement.current?.showModal()}>Ver extrato</Button>
                     </div>
-                    <p className="error" role="alert">{closing.errors.fingerprint}</p>
+                    {refreshing && <p className="mt-2" role="status">Atualizando mesadas…</p>}
+                    {refreshFailed && <p className="mt-2" role="alert">
+                        Não foi possível atualizar as informações.{' '}
+                        <Button type="button" onClick={refreshAllowance}>Tentar novamente</Button>
+                    </p>}
                 </section>
             )}
             <details className="card group">
@@ -157,7 +192,7 @@ export default function Allowance(props: AllowanceProps) {
                                 <ul>{payout.items.map(item => <li key={item.id}>{item.title} · {item.points} pontos · {money(item.amount_cents ?? 0)}</li>)}</ul>
                             </details>
                             {isGuardian && !payout.paid_at && (
-                                <button type="button" className="secondary" disabled={payment.processing}
+                                <button type="button" className="secondary" disabled={payment.processing || closing.processing || closed || refreshing || refreshFailed}
                                     onClick={() => {
                                         if (window.confirm(`Confirmar que você pagou ${money(payout.amount_cents)}?`)) {
                                             payment.patch(`${endpoint}/contas/${payout.id}/paga`, { preserveScroll: true });
@@ -212,6 +247,32 @@ export default function Allowance(props: AllowanceProps) {
                 <h2>Extrato de pontos</h2>
                 <PointEntries credits={credits} empty="Nenhum ponto aprovado neste período." />
             </section>}
+            {isGuardian && <dialog ref={confirmation} aria-labelledby="close-cycle-title" aria-describedby="close-cycle-description"
+                aria-busy={closing.processing || refreshing} onCancel={event => {
+                    if (closing.processing || refreshing) event.preventDefault();
+                }}
+                className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-solid border-dag-line bg-white p-5 text-dag-ink shadow-xl backdrop:bg-dag-ink/55">
+                <h2 id="close-cycle-title">Encerrar ciclo de mesada?</h2>
+                {preview ? <p id="close-cycle-description" className="leading-loose">
+                    Deseja encerrar esse ciclo de <PointsBadge points={preview.points} /> e gerar uma conta de <ValueBadge cents={preview.amount_cents} />?
+                </p> : <p id="close-cycle-description">Nenhum saldo disponível para encerrar.</p>}
+                <div className="flex flex-wrap justify-end gap-2">
+                    <Button type="button" autoFocus disabled={closing.processing || refreshing} onClick={() => confirmation.current?.close()}>Cancelar</Button>
+                    {stale
+                        ? <Button type="button" disabled={refreshing} onClick={refreshAllowance}>
+                            {refreshing ? 'Atualizando…' : 'Atualizar valores'}
+                        </Button>
+                        : <Button type="button" disabled={!preview || closing.processing} className="bg-dag-purple text-white hover:bg-[#452497]"
+                            onClick={() => { void close(); }}>
+                            {closing.processing && <LoaderCircle size={17} className="motion-safe:animate-spin" aria-hidden="true" />}
+                            {closing.processing ? 'Encerrando…' : 'Sim, confirmar'}
+                        </Button>}
+                </div>
+                {stale && refreshFailed && <p className="mt-2" role="alert">Não foi possível atualizar os valores. Tente novamente.</p>}
+                <Toast message={toast} container={confirmation.current} />
+            </dialog>}
+            <Toast message={closed ? { success: true, text: 'Ciclo encerrado e conta gerada com sucesso.' } : null}
+                onConfirm={closed ? refreshAllowance : undefined} />
         </main>
     );
 }
