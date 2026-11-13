@@ -1,5 +1,5 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, CalendarDays, ChevronDown, Clock, Plus } from 'lucide-react';
+import { ArrowLeft, Ban, CalendarDays, Camera, ChevronDown, Clock, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
@@ -83,7 +83,7 @@ export default function Tasks({ tasks, children, today }: TaskFormData & { tasks
         <section aria-labelledby="registered-tasks">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 id="registered-tasks">Tarefas cadastradas</h2>
-                <Badge className="px-3 py-1.5" aria-live="polite">Total: {pointsFormat.format(total)} {pointsLabel}</Badge>
+                <Badge className="px-3 py-1.5" aria-live="polite">{pointsFormat.format(total)} {pointsLabel}</Badge>
             </div>
             {filtered.length === 0 && <p>{tasks.length ? 'Nenhuma tarefa corresponde aos filtros.' : 'Nenhuma tarefa cadastrada.'}</p>}
             {filtered.map(task => (
@@ -98,20 +98,38 @@ export default function Tasks({ tasks, children, today }: TaskFormData & { tasks
                     <div className="mt-4 border-0 border-t border-solid border-dag-line pt-4">
                         <p className="criteria">{task.criteria}</p>
                         <p><strong>Periodicidade:</strong> {scheduleLabel(task)}</p>
-                        <div className="mb-4 grid grid-cols-2 items-start gap-2">
-                            <Badge className="gap-1.5 bg-dag-lilac px-2 py-1.5 leading-snug">
-                                <Clock size={15} className="shrink-0" aria-hidden="true" /> Seg a Sex até {task.weekday_time}
-                            </Badge>
-                            <Badge className="gap-1.5 bg-dag-lilac px-2 py-1.5 leading-snug">
-                                <Clock size={15} className="shrink-0" aria-hidden="true" /> Sáb e Dom até {task.weekend_time}
-                            </Badge>
+                        <div className="mb-4 flex justify-between gap-4">
+                            {[
+                                { days: 'Seg a Sex', time: task.weekday_time },
+                                { days: 'Sáb e Dom', time: task.weekend_time },
+                            ].map(({ days, time }) => (
+                                <div key={days} className="grid justify-items-center gap-1">
+                                    <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
+                                        <Clock size={15} aria-hidden="true" /> {time}
+                                    </span>
+                                    <Badge className="bg-dag-lilac px-2 py-1">{days}</Badge>
+                                </div>
+                            ))}
                         </div>
-                        <p className="flex items-center gap-2"><CalendarDays size={17} aria-hidden="true" /> Em vigor desde {formatDate(task.starts_on)}</p>
-                        <p>Foto na entrega: {photoLabels[task.photo_mode]}</p>
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-sm">
+                            <span className="inline-flex items-center gap-2">
+                                <CalendarDays size={17} aria-hidden="true" />
+                                <span className="sr-only">Data de início</span>
+                                <time dateTime={task.starts_on}>{formatDate(task.starts_on)}</time>
+                            </span>
+                            <span className="inline-flex items-center gap-2">
+                                <span className="relative inline-flex" aria-hidden="true">
+                                    <Camera size={17} className={task.photo_mode === 'optional' ? 'opacity-45' : undefined} />
+                                    {task.photo_mode === 'disabled' && <Ban size={12} className="absolute -right-1 -bottom-0.5 rounded-full bg-white text-red-800" />}
+                                </span>
+                                <span className="sr-only">Foto na entrega</span>
+                                {photoLabels[task.photo_mode]}
+                            </span>
+                        </div>
                         <ul className="mb-4 flex list-none flex-wrap gap-3 p-0" aria-label="Filhos atribuídos">
-                            {task.children.map((name, index) => <li key={task.child_ids[index]} className="flex items-center gap-2">
+                            {task.children.map((name, index) => <li key={task.child_ids[index]} title={name} className="flex">
                                 <Avatar aria-hidden="true"><AvatarFallback>{nameInitials(name)}</AvatarFallback></Avatar>
-                                {name}
+                                <span className="sr-only">{name}</span>
                             </li>)}
                         </ul>
                         {task.can_manage && (editing === task.id
