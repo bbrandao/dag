@@ -166,6 +166,30 @@ final class TasksTest extends TestCase
         $this->assertDatabaseCount('task_occurrences', 2);
     }
 
+    public function test_guardian_dashboard_includes_projected_recurrences_without_creating_missions(): void
+    {
+        [$guardian, $child] = $this->family();
+        $this->as($guardian);
+
+        foreach ([
+            ['title' => 'Diária', 'daily_days' => [1, 3, 6]],
+            ['title' => 'Semanal', 'frequency' => 'weekly', 'weekly_day' => 6, 'points' => 20],
+            ['title' => 'Mensal', 'frequency' => 'monthly', 'points' => 30],
+            ['title' => 'Anual futura', 'frequency' => 'yearly', 'year_month' => 11, 'month_day' => 20,
+                'starts_on' => '2026-11-19', 'points' => 40],
+            ['title' => 'Fora do mês', 'starts_on' => '2026-12-01'],
+        ] as $attributes) {
+            $this->post('/guardian/tasks', $this->task($child, $attributes))->assertSessionHasNoErrors();
+        }
+
+        $this->assertDatabaseCount('task_occurrences', 3);
+        $this->get('/app')->assertInertia(fn (Assert $page) => $page
+            ->where('progress.0.periods.day.open', 1)->where('progress.0.periods.day.possible', 10)
+            ->where('progress.0.periods.week.open', 4)->where('progress.0.periods.week.possible', 50)
+            ->where('progress.0.periods.month.open', 15)->where('progress.0.periods.month.possible', 230));
+        $this->assertDatabaseCount('task_occurrences', 3);
+    }
+
     public function test_lists_sort_by_frequency_local_deadline_points_and_creation_time(): void
     {
         [$guardian, $child] = $this->family();

@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
 import { money } from './money';
-import { nameInitials } from './tasks';
+import { months, nameInitials } from './tasks';
 
 interface PeriodProgress {
     open: number;
@@ -27,9 +27,12 @@ const number = new Intl.NumberFormat('pt-BR');
 const percent = new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 });
 const box = 'flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 py-2 text-center text-[0.6875rem] leading-tight sm:px-2 sm:text-xs';
 
-function Period({ label, progress, reviewUrl }: { label: string; progress: PeriodProgress; reviewUrl?: string }) {
+function Period({ label, progress, reviewUrl, month }: { label: string; progress: PeriodProgress; reviewUrl?: string; month?: string }) {
     return <section className="border-0 border-t border-solid border-dag-line pt-3">
-        <h4 className="mb-2 text-sm font-bold">{label}</h4>
+        <h4 className="mb-2 flex items-center gap-2 text-sm font-bold">
+            {label}
+            {month && <Badge className="bg-dag-lilac px-2 py-1">{month}</Badge>}
+        </h4>
         <div className={`grid gap-1.5 ${reviewUrl ? 'grid-cols-4' : 'grid-cols-3'}`}>
             <div className={`${box} bg-[#ffe4a5] text-[#694305]`}>
                 <span>A fazer</span><strong className="text-lg tabular-nums">{number.format(progress.open)}</strong>
@@ -46,9 +49,9 @@ function Period({ label, progress, reviewUrl }: { label: string; progress: Perio
             </Link>}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge className="bg-dag-lilac px-2 py-1">{number.format(progress.earned)} pontos conquistados</Badge>
+            <Badge className="bg-dag-lilac px-2 py-1">{number.format(progress.earned)} {progress.earned === 1 ? 'ponto' : 'pontos'}</Badge>
             <Badge className="bg-dag-lilac px-2 py-1">
-                {percent.format(progress.possible ? progress.earned / progress.possible : 0)} dos pontos possíveis
+                {percent.format(progress.possible ? progress.earned / progress.possible : 0)}
             </Badge>
         </div>
     </section>;
@@ -56,6 +59,8 @@ function Period({ label, progress, reviewUrl }: { label: string; progress: Perio
 
 export function ChildProgressCard({ child, today }: { child: GuardianProgress; today: string }) {
     const reviews = `/guardian/revisoes?child=${encodeURIComponent(child.id)}`;
+    const [year, month] = today.split('-');
+    const monthLabel = `${months[Number(month) - 1].slice(0, 3)}/${year}`;
 
     return <article className="card grid gap-4">
         <h3 className="m-0 flex items-center gap-2 text-base">
@@ -70,9 +75,11 @@ export function ChildProgressCard({ child, today }: { child: GuardianProgress; t
         </div>
         <Period label="Hoje" progress={child.periods.day} reviewUrl={`${reviews}&date=${today}&status=in_review`} />
         <Period label="Esta semana" progress={child.periods.week} />
-        <Period label="Este mês" progress={child.periods.month} />
-        <div className="flex flex-wrap gap-2">
-            <Button asChild><Link href={`/guardian/mesadas/${child.id}#evolucao`}>Ver evolução e extrato</Link></Button>
+        <Period label="Este mês" month={monthLabel} progress={child.periods.month} />
+        <div className="mt-2 flex flex-wrap gap-2">
+            <Button asChild className="bg-dag-purple text-white hover:bg-[#452497]">
+                <Link href={`/guardian/mesadas/${child.id}#evolucao`}>Ver evolução e extrato</Link>
+            </Button>
             <Button asChild><Link href={reviews}>Revisar Missões</Link></Button>
         </div>
     </article>;

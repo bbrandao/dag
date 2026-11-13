@@ -2,6 +2,7 @@
 
 namespace App\Repositories;
 
+use App\Models\Family;
 use App\Models\TaskTemplate;
 use App\Models\User;
 use DateTimeInterface;
@@ -54,6 +55,21 @@ final class TaskRepository
     {
         TaskTemplate::where('family_id', $familyId)->where('starts_on', '<=', $date)
             ->whereHas('children', $this->activeChildren($childId))->select('id')->eachById($callback);
+    }
+
+    public function scheduledTemplates(Family $family, Collection $childIds, string $before): Collection
+    {
+        $assigned = fn ($query) => $query->whereIn('users.id', $childIds)->where('users.active', true);
+
+        return TaskTemplate::where('family_id', $family->id)->where('starts_on', '<', $before)
+            ->whereHas('children', $assigned)
+            ->with(['children' => fn ($query) => $assigned($query)->select('users.id')])->get();
+    }
+
+    public function scheduledOccurrences(Family $family, Collection $childIds, string $from): Collection
+    {
+        return DB::table('task_occurrences')->where('family_id', $family->id)->whereIn('child_id', $childIds)
+            ->where('due_on', '>=', $from)->get(['task_id', 'child_id', 'frequency', 'period_start', 'due_on']);
     }
 
     public function lockWithActiveChildren(string $id, ?string $childId): ?TaskTemplate

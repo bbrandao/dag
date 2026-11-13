@@ -19,6 +19,7 @@ final class DashboardService
         private readonly DashboardRepository $dashboard,
         private readonly TaskService $tasks,
         private readonly PushTransport $push,
+        private readonly TaskCalendar $calendar,
     ) {}
 
     public function data(User $user): array
@@ -57,13 +58,21 @@ final class DashboardService
         $day = $now->startOfDay();
         $week = $now->startOfWeek(CarbonInterface::MONDAY);
         $localMonth = $now->startOfMonth();
-        $periods = $user->role === User::GUARDIAN ? $this->dashboard->periodTotals($user, $ids, [
-            'day' => [$day->utc(), $day->addDay()->utc()],
-            'week' => [$week->utc(), $week->addWeek()->utc()],
-            'month' => [$localMonth->utc(), $localMonth->addMonth()->utc()],
-        ], $now->utc()) : null;
+        $windows = [
+            'day' => [$day, $day->addDay()],
+            'week' => [$week, $week->addWeek()],
+            'month' => [$localMonth, $localMonth->addMonth()],
+        ];
+        $periods = null;
+        $projected = [];
+        if ($user->role === User::GUARDIAN && $ids->isNotEmpty()) {
+            $projected = $this->calendar->projectedTotals($user->family, $ids, $now, max($windows['week'][1], $windows['month'][1]));
+            $periods = $this->dashboard->periodTotals($user, $ids, array_map(
+                fn (array $window) => [$window[0]->utc(), $window[1]->utc()], $windows,
+            ), $now->utc());
+        }
 
-        return $profiles->map(function (object $child) use ($missions, $payments, $periods): array {
+        return $profiles->map(function (object $child) use ($missions, $payments, $periods, $projected, $windows): array {
             $mission = $missions->get($child->id);
             $payment = $payments->get($child->id);
 
@@ -81,15 +90,15 @@ final class DashboardService
                 'monthAwaitingConversion' => (int) ($mission->month_unpriced_count ?? 0) > 0,
                 'pendingCents' => (int) ($payment->pending_cents ?? 0),
                 'paidThisMonth' => (int) ($payment->paid_this_month ?? 0),
-                'periods' => $periods === null ? null : $this->periodProgress($periods->get($child->id)),
+                'periods' => $periods === null ? null : $this->periodProgress($periods->get($child->id), $projected[$child->id] ?? [], $windows),
             ];
         });
     }
 
-    private function periodProgress(?object $totals): array
+    private function periodProgress(?object $totals, array $projected, array $windows): array
     {
         $progress = [];
-        foreach (['day', 'week', 'month'] as $period) {
+        foreach ($windows as $period => [$start, $end]) {
             $progress[$period] = [
                 'open' => (int) ($totals->{"{$period}_open"} ?? 0),
                 'approved' => (int) ($totals->{"{$period}_approved"} ?? 0),
@@ -98,6 +107,13 @@ final class DashboardService
                 'earned' => (int) ($totals->{"{$period}_earned"} ?? 0),
                 'possible' => (int) ($totals->{"{$period}_possible"} ?? 0),
             ];
+            foreach ($projected as $day => $counts) {
+                if ($day >= $start->toDateString() && $day < $end->toDateString()) {
+                    foreach ($counts as $metric => $value) {
+                        $progress[$period][$metric] += $value;
+                    }
+                }
+            }
         }
 
         return $progress;

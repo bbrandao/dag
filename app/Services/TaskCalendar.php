@@ -7,6 +7,7 @@ use App\Models\TaskTemplate;
 use App\Repositories\TaskRepository;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -32,34 +33,12 @@ final class TaskCalendar
     public function materializeTask(TaskTemplate $task, CarbonImmutable $now): void
     {
         $date = $now->startOfDay();
-        $period = match ($task->frequency) {
-            'daily' => $date,
-            'weekly' => $date->startOfWeek(CarbonInterface::MONDAY),
-            'monthly' => $date->startOfMonth(),
-            'yearly' => $date->startOfYear(),
-        };
-        $schedule = $task->schedule;
-        $day = match ($task->frequency) {
-            'daily' => in_array($date->dayOfWeekIso, $schedule['days'], true) ? $date : null,
-            'weekly' => $period->addDays($schedule['day'] - 1),
-            'monthly' => $this->monthDay($period, $schedule['day']),
-            'yearly' => $this->monthDay($period->month($schedule['month']), $schedule['day']),
-        };
-
-        if ($day === null) {
+        $slot = $this->slot($task, $date);
+        if ($slot === null || $slot['opensAt']->gt($now)) {
             return;
         }
 
-        $startsOn = CarbonImmutable::parse($task->starts_on, $now->timezone)->startOfDay();
-        $createdAt = $task->created_at->toImmutable()->setTimezone($now->timezone);
-        $opensAt = max($period, $startsOn, $createdAt);
-        $time = $day->dayOfWeekIso >= 6 ? $task->weekend_time : $task->weekday_time;
-        $dueAt = $day->setTimeFromTimeString($time);
-
-        if ($opensAt->gt($now) || $day->lt($opensAt->startOfDay())) {
-            return;
-        }
-
+        ['period' => $period, 'day' => $day, 'opensAt' => $opensAt, 'dueAt' => $dueAt] = $slot;
         $previousCadence = $this->tasks->previousCadenceChildIds($task, $date->toDateString());
 
         $rows = $task->children->reject(fn ($child) => $previousCadence->contains($child->id))->map(fn ($child) => [
@@ -79,6 +58,73 @@ final class TaskCalendar
         ])->all();
 
         $this->tasks->insertOccurrences($rows);
+    }
+
+    public function projectedTotals(Family $family, Collection $childIds, CarbonImmutable $now, CarbonImmutable $end): array
+    {
+        $today = $now->startOfDay();
+        $existing = $this->tasks->scheduledOccurrences($family, $childIds, $today->startOfYear()->toDateString())
+            ->groupBy(['task_id', 'child_id']);
+        $totals = [];
+
+        foreach ($this->tasks->scheduledTemplates($family, $childIds, $end->toDateString()) as $task) {
+            // Each recurrence contributes only on its deadline date.
+            for ($date = $today; $date->lt($end); $date = $date->addDay()) {
+                $slot = $this->slot($task, $date);
+                if ($slot === null || ! $slot['day']->isSameDay($date)) {
+                    continue;
+                }
+
+                $day = $date->toDateString();
+                $period = $slot['period']->toDateString();
+                // Longer recurrences can open before their deadline.
+                $opensOn = max($today, $slot['opensAt']->startOfDay())->toDateString();
+                foreach ($task->children as $child) {
+                    $occurrences = $existing->get($task->id)?->get($child->id);
+                    $covered = $occurrences?->contains(fn (object $mission) => $mission->frequency === $task->frequency
+                        ? $mission->period_start === $period
+                        : $mission->due_on >= $opensOn);
+                    if ($covered) {
+                        continue;
+                    }
+
+                    $status = $slot['dueAt']->gt($now) ? 'open' : 'expired';
+                    $totals[$child->id][$day][$status] = ($totals[$child->id][$day][$status] ?? 0) + 1;
+                    $totals[$child->id][$day]['possible'] = ($totals[$child->id][$day]['possible'] ?? 0) + $task->points;
+                }
+            }
+        }
+
+        return $totals;
+    }
+
+    private function slot(TaskTemplate $task, CarbonImmutable $date): ?array
+    {
+        $period = match ($task->frequency) {
+            'daily' => $date,
+            'weekly' => $date->startOfWeek(CarbonInterface::MONDAY),
+            'monthly' => $date->startOfMonth(),
+            'yearly' => $date->startOfYear(),
+        };
+        $schedule = $task->schedule;
+        $day = match ($task->frequency) {
+            'daily' => in_array($date->dayOfWeekIso, $schedule['days'], true) ? $date : null,
+            'weekly' => $period->addDays($schedule['day'] - 1),
+            'monthly' => $this->monthDay($period, $schedule['day']),
+            'yearly' => $this->monthDay($period->month($schedule['month']), $schedule['day']),
+        };
+
+        if ($day === null) {
+            return null;
+        }
+
+        $startsOn = CarbonImmutable::parse($task->starts_on, $date->timezone)->startOfDay();
+        $createdAt = $task->created_at->toImmutable()->setTimezone($date->timezone);
+        $opensAt = max($period, $startsOn, $createdAt);
+        $time = $day->dayOfWeekIso >= 6 ? $task->weekend_time : $task->weekday_time;
+        $dueAt = $day->setTimeFromTimeString($time);
+
+        return $day->lt($opensAt->startOfDay()) ? null : compact('period', 'day', 'opensAt', 'dueAt');
     }
 
     private function monthDay(CarbonImmutable $month, ?int $day): CarbonImmutable
