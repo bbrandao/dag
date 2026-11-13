@@ -1,6 +1,11 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { useEffect } from 'react';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Avatar, AvatarFallback } from '../components/ui/avatar';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
 import { money } from '../money';
+import { nameInitials } from '../tasks';
 
 const monthLabel = (value: string) => `${value.slice(5, 7)}/${value.slice(0, 4)}`;
 
@@ -9,6 +14,17 @@ interface Credit {
     title: string;
     points: number;
     amount_cents: number | null;
+}
+
+function PointEntries({ credits, empty }: { credits: AllowanceProps['credits']; empty: string }) {
+    if (credits.length === 0) return <p>{empty}</p>;
+
+    return credits.map(credit => (
+        <article className="ledger-entry" key={credit.id}>
+            <p><strong>{credit.title}</strong> · +{credit.points} {credit.points === 1 ? 'ponto' : 'pontos'}</p>
+            <p>{credit.approved_at} · {credit.amount_cents === null ? 'Aguardando taxa' : money(credit.amount_cents)}</p>
+        </article>
+    ));
 }
 
 interface AllowanceProps {
@@ -32,11 +48,14 @@ export default function Allowance(props: AllowanceProps) {
     const endpoint = `/guardian/mesadas/${child.id}`;
     const closing = useForm({ request_id: '', fingerprint: '' });
     const payment = useForm({});
+    const statement = useRef<HTMLDialogElement>(null);
     const largestMonth = Math.max(1, ...months.map(month => month.points));
 
     useEffect(() => {
         const section = window.location.hash.slice(1);
-        document.getElementById(section)?.scrollIntoView();
+        const target = document.getElementById(section);
+        if (target instanceof HTMLDetailsElement) target.open = true;
+        target?.scrollIntoView();
     }, []);
 
     function close() {
@@ -49,15 +68,34 @@ export default function Allowance(props: AllowanceProps) {
         <main className="screen">
             <Head title={isGuardian ? 'Mesadas' : 'Meus ganhos'} />
             <header className="topbar">
-                <h1>{isGuardian ? `Mesadas de ${child.name}` : 'Meus ganhos'}</h1>
-                <Link className="button secondary" href="/app">Voltar</Link>
+                <h1>{isGuardian ? 'Mesadas' : 'Meus ganhos'}</h1>
+                <Button asChild><Link href="/app"><ArrowLeft size={17} aria-hidden="true" /> Voltar</Link></Button>
             </header>
-            <section className="card" aria-label="Resumo dos ganhos">
+            {isGuardian ? <section className="card grid gap-4" aria-label="Resumo dos ganhos">
+                <h2 className="m-0 flex items-center gap-2 text-lg">
+                    <Avatar aria-hidden="true"><AvatarFallback>{nameInitials(child.name)}</AvatarFallback></Avatar>
+                    {child.name}
+                </h2>
+                <div className="flex flex-wrap justify-between gap-2">
+                    <Badge className="px-3 py-1.5">{props.availablePoints} {props.availablePoints === 1 ? 'ponto' : 'pontos'}</Badge>
+                    <Badge className="ml-auto bg-[#ccf1d7] px-3 py-1.5 text-[#1b5632]">
+                        {props.unpriced ? 'Aguardando taxa' : money(props.availableCents)}
+                    </Badge>
+                </div>
+                <dl className="m-0 grid grid-cols-2 gap-2">
+                    <div className="grid min-w-0 content-center gap-1 rounded-xl bg-[#ffe4a5] p-2 text-center text-sm text-[#694305]">
+                        <dt>A receber</dt><dd className="m-0 font-bold wrap-anywhere">{money(props.pendingCents)}</dd>
+                    </div>
+                    <div className="grid min-w-0 content-center gap-1 rounded-xl bg-[#d9ebff] p-2 text-center text-sm text-[#164875]">
+                        <dt>Total Recebido</dt><dd className="m-0 font-bold wrap-anywhere">{money(props.paidCents)}</dd>
+                    </div>
+                </dl>
+            </section> : <section className="card" aria-label="Resumo dos ganhos">
                 <p className="tag reward">{props.availablePoints} pontos disponíveis</p>
                 <p>{props.unpriced ? 'Há pontos aguardando a primeira conversão.' : `Equivalente a ${money(props.availableCents)}`}</p>
                 <p><strong>{money(props.pendingCents)}</strong> a receber</p>
                 <p><strong>{money(props.paidCents)}</strong> já recebido</p>
-            </section>
+            </section>}
             {isGuardian && (
                 <section className="card" id="fechamento">
                     <h2>Encerrar ciclo de mesada</h2>
@@ -65,73 +103,89 @@ export default function Allowance(props: AllowanceProps) {
                     {preview ? (
                         <>
                             <p>{preview.points} pontos serão movidos para uma conta de {money(preview.amount_cents)} a receber.</p>
-                            <button type="button" disabled={closing.processing} onClick={close}>Encerrar ciclo e gerar conta</button>
                         </>
                     ) : (
                         <p>{rates.length === 0
                             ? <>Defina o <Link href="/guardian/configuracoes">valor do ponto em Configurações</Link> para fechar a mesada.</>
                             : 'O ciclo fica disponível quando houver pontos aprovados do mês atual fora de uma mesada.'}</p>
                     )}
+                    <div className="flex flex-wrap gap-2">
+                        {preview && <button type="button" disabled={closing.processing} onClick={close}>Encerrar ciclo e gerar conta</button>}
+                        <Button type="button" className="cursor-pointer" onClick={() => statement.current?.showModal()}>Ver extrato</Button>
+                    </div>
                     <p className="error" role="alert">{closing.errors.fingerprint}</p>
                 </section>
             )}
-            <section className="card">
-                <h2>Mesadas</h2>
-                {payouts.length === 0 && <p>Nenhuma mesada gerada.</p>}
-                {payouts.map(payout => (
-                    <article className="ledger-entry" key={payout.id}>
-                        <p><strong>{money(payout.amount_cents)}</strong> · {payout.points} pontos · {payout.paid_at ? 'Paga' : 'A receber'}</p>
-                        <p>{payout.competence ? `Fechamento de ${monthLabel(payout.competence)}` : 'Fechamento manual'} · {payout.created_at}</p>
-                        {payout.paid_at && <p>Pagamento registrado em {payout.paid_at}</p>}
-                        <details><summary>Ver pontos incluídos</summary>
-                            <ul>{payout.items.map(item => <li key={item.id}>{item.title} · {item.points} pontos · {money(item.amount_cents ?? 0)}</li>)}</ul>
-                        </details>
-                        {isGuardian && !payout.paid_at && (
-                            <button type="button" className="secondary" disabled={payment.processing}
-                                onClick={() => {
-                                    if (window.confirm(`Confirmar que você pagou ${money(payout.amount_cents)}?`)) {
-                                        payment.patch(`${endpoint}/contas/${payout.id}/paga`, { preserveScroll: true });
-                                    }
-                                }}>Marcar como paga</button>
-                        )}
-                    </article>
-                ))}
-            </section>
-            <section className="card" id="evolucao">
-                <h2>Evolução nos últimos seis meses</h2>
-                <div className="point-trend" aria-hidden="true">
-                    {[...months].reverse().map(month => (
-                        <div key={month.month}>
-                            <span>{monthLabel(month.month)}</span>
-                            <div><i style={{ width: `${100 * month.points / largestMonth}%` }} /></div>
-                            <span>{month.points} pts</span>
-                        </div>
+            <details className="card group">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+                    <h2 className="m-0">Mesadas</h2><ChevronDown size={19} className="shrink-0 text-dag-purple group-open:rotate-180" aria-hidden="true" />
+                </summary>
+                <div className="mt-4">
+                    {payouts.length === 0 && <p>Nenhuma mesada gerada.</p>}
+                    {payouts.map(payout => (
+                        <article className="ledger-entry" key={payout.id}>
+                            <p><strong>{money(payout.amount_cents)}</strong> · {payout.points} pontos · {payout.paid_at ? 'Paga' : 'A receber'}</p>
+                            <p>{payout.competence ? `Fechamento de ${monthLabel(payout.competence)}` : 'Fechamento manual'} · {payout.created_at}</p>
+                            {payout.paid_at && <p>Pagamento registrado em {payout.paid_at}</p>}
+                            <details><summary>Ver pontos incluídos</summary>
+                                <ul>{payout.items.map(item => <li key={item.id}>{item.title} · {item.points} pontos · {money(item.amount_cents ?? 0)}</li>)}</ul>
+                            </details>
+                            {isGuardian && !payout.paid_at && (
+                                <button type="button" className="secondary" disabled={payment.processing}
+                                    onClick={() => {
+                                        if (window.confirm(`Confirmar que você pagou ${money(payout.amount_cents)}?`)) {
+                                            payment.patch(`${endpoint}/contas/${payout.id}/paga`, { preserveScroll: true });
+                                        }
+                                    }}>Marcar como paga</button>
+                            )}
+                        </article>
                     ))}
                 </div>
-                <div className="table-scroll">
-                    <table>
-                        <thead><tr><th scope="col">Mês</th><th scope="col">Pontos</th><th scope="col">Ganhos</th><th scope="col">Pagos</th></tr></thead>
-                        <tbody>{months.map(month => (
-                            <tr key={month.month}>
-                                <th scope="row">{monthLabel(month.month)}</th>
-                                <td>{month.points}</td>
-                                <td>{month.unpriced ? 'Aguardando taxa' : money(month.earned_cents)}</td>
-                                <td>{money(month.paid_cents)}</td>
-                            </tr>
-                        ))}</tbody>
-                    </table>
+            </details>
+            <details className="card group scroll-mt-20" id="evolucao">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
+                    <h2 className="m-0">Evolução nos últimos 6 meses</h2><ChevronDown size={19} className="shrink-0 text-dag-purple group-open:rotate-180" aria-hidden="true" />
+                </summary>
+                <div className="mt-4">
+                    <div className="point-trend" aria-hidden="true">
+                        {[...months].reverse().map(month => (
+                            <div key={month.month}>
+                                <span>{monthLabel(month.month)}</span>
+                                <div><i style={{ width: `${100 * month.points / largestMonth}%` }} /></div>
+                                <span>{month.points} pts</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="table-scroll">
+                        <table>
+                            <thead><tr><th scope="col">Mês</th><th scope="col">Pontos</th><th scope="col">Ganhos</th><th scope="col">Pagos</th></tr></thead>
+                            <tbody>{months.map(month => (
+                                <tr key={month.month}>
+                                    <th scope="row">{monthLabel(month.month)}</th>
+                                    <td>{month.points}</td>
+                                    <td>{month.unpriced ? 'Aguardando taxa' : money(month.earned_cents)}</td>
+                                    <td>{money(month.paid_cents)}</td>
+                                </tr>
+                            ))}</tbody>
+                        </table>
+                    </div>
                 </div>
-            </section>
-            <section className="card">
+            </details>
+            {isGuardian ? <dialog ref={statement} aria-labelledby="points-statement-title"
+                className="fixed inset-0 m-auto h-[70dvh] w-[80vw] max-w-none overflow-hidden rounded-2xl border border-solid border-dag-line bg-white p-0 text-dag-ink shadow-xl backdrop:bg-dag-ink/55">
+                <div className="flex h-full min-h-0 flex-col">
+                    <header className="flex flex-wrap items-center justify-between gap-2 border-0 border-b border-solid border-dag-line p-4">
+                        <h2 id="points-statement-title" className="m-0 text-lg">Extrato de Pontos</h2>
+                        <Button type="button" autoFocus className="cursor-pointer" onClick={() => statement.current?.close()}>Fechar</Button>
+                    </header>
+                    <div className="min-h-0 flex-1 overflow-y-auto p-4" tabIndex={0} role="region" aria-label="Pontos fora de ciclos encerrados">
+                        <PointEntries credits={credits} empty="Nenhum ponto disponível fora de um ciclo encerrado." />
+                    </div>
+                </div>
+            </dialog> : <section className="card">
                 <h2>Extrato de pontos</h2>
-                {credits.length === 0 && <p>Nenhum ponto aprovado neste período.</p>}
-                {credits.map(credit => (
-                    <article className="ledger-entry" key={credit.id}>
-                        <p><strong>{credit.title}</strong> · +{credit.points} pontos</p>
-                        <p>{credit.approved_at} · {credit.amount_cents === null ? 'Aguardando taxa' : money(credit.amount_cents)}</p>
-                    </article>
-                ))}
-            </section>
+                <PointEntries credits={credits} empty="Nenhum ponto aprovado neste período." />
+            </section>}
         </main>
     );
 }

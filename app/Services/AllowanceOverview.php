@@ -58,7 +58,7 @@ final class AllowanceOverview
                 'points' => $preview->sum('points'), 'amount_cents' => $preview->sum('amount_cents'),
             ] : null,
             'months' => $months,
-            'credits' => $credits->take(30)->map(fn ($credit) => [
+            'credits' => ($isGuardian ? $available->sortByDesc('approved_at')->values() : $credits->take(30))->map(fn ($credit) => [
                 'id' => $credit->id, 'title' => $credit->title, 'points' => $credit->points,
                 'amount_cents' => $credit->amount_cents, 'approved_at' => $date($credit->approved_at)->format('d/m/Y H:i'),
             ]),

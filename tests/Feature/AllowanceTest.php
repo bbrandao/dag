@@ -50,6 +50,8 @@ final class AllowanceTest extends TestCase
         $this->assertDatabaseCount('payouts', 1);
         $payout = DB::table('payouts')->first();
         $this->assertSame(200, $payout->amount_cents);
+        $this->get($url)->assertInertia(fn (Assert $page) => $page
+            ->has('credits', 0)->where('pendingCents', 200)->where('paidCents', 0));
 
         $this->travelTo(Carbon::parse('2026-11-01 16:00:00', 'UTC'));
         $new = $this->mission($task, $child);
@@ -60,6 +62,10 @@ final class AllowanceTest extends TestCase
         $this->travel(1)->hours();
         $this->patch("{$url}/contas/{$payout->id}/paga")->assertRedirect($url);
         $this->assertSame($paidAt, DB::table('payouts')->value('paid_at'));
+        $newCredit = DB::table('point_credits')->where('occurrence_id', $new)->value('id');
+        $this->get($url)->assertInertia(fn (Assert $page) => $page
+            ->has('credits', 1)->where('credits.0.id', $newCredit)->where('credits.0.amount_cents', 200)
+            ->where('pendingCents', 0)->where('paidCents', 200));
         $this->get('/app')->assertInertia(fn (Assert $page) => $page->component('Dashboard')
             ->where('rateCents', 20)->has('progress', 1)->where('progress.0.id', $child->id)
             ->where('progress.0.availablePoints', 10)->where('progress.0.availableCents', 200)->where('progress.0.approved', 1)

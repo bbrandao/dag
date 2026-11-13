@@ -107,9 +107,11 @@ export default function Tasks({ tasks, children }: Pick<TaskFormData, 'children'
         {refreshFailed && <p role="alert">A tarefa foi excluída. Não foi possível atualizar a lista.{' '}
             <Button type="button" onClick={refreshTasks}>Tentar novamente</Button>
         </p>}
-        <section aria-labelledby="registered-tasks" aria-busy={refreshing}>
+        <section aria-label="Tarefas cadastradas" aria-busy={refreshing}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h2 id="registered-tasks">Tarefas cadastradas</h2>
+                <Badge className="bg-dag-lilac px-3 py-1.5" aria-live="polite">
+                    {pointsFormat.format(filtered.length)} {filtered.length === 1 ? 'tarefa' : 'tarefas'}
+                </Badge>
                 <Badge className="px-3 py-1.5" aria-live="polite">{pointsFormat.format(total)} {pointsLabel}</Badge>
             </div>
             {filtered.length === 0 && <p>{tasks.length ? 'Nenhuma tarefa corresponde aos filtros.' : 'Nenhuma tarefa cadastrada.'}</p>}
