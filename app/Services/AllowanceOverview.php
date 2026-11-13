@@ -25,7 +25,7 @@ final class AllowanceOverview
         $family = $profile->family;
         $now = $this->ledger->now($family);
         $month = $now->startOfMonth();
-        $available = $this->accounts->availableCredits($profile);
+        $available = $this->accounts->availableCredits($profile, withCompletion: $isGuardian);
         $preview = $available->filter(fn ($credit) => CarbonImmutable::parse($credit->approved_at, 'UTC')->gte($month));
         $credits = $this->accounts->creditsSince($profile, $month->subMonths(5)->utc());
         $payouts = $this->accounts->payoutHistory($profile);
@@ -61,6 +61,7 @@ final class AllowanceOverview
             'credits' => ($isGuardian ? $available->sortByDesc('approved_at')->values() : $credits->take(30))->map(fn ($credit) => [
                 'id' => $credit->id, 'title' => $credit->title, 'points' => $credit->points,
                 'amount_cents' => $credit->amount_cents, 'approved_at' => $date($credit->approved_at)->format('d/m/Y H:i'),
+                'completed_at' => isset($credit->completed_at) ? $date($credit->completed_at)->format('d/m/Y H:i') : null,
             ]),
             'payouts' => $payouts->map(fn ($payout) => [
                 'id' => $payout->id, 'competence' => $payout->competence,

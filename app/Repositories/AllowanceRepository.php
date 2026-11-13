@@ -65,9 +65,12 @@ final class AllowanceRepository
         return (int) $this->credits($child)->sum('credits.points');
     }
 
-    public function availableCredits(User $child, ?DateTimeInterface $before = null): Collection
+    public function availableCredits(User $child, ?DateTimeInterface $before = null, bool $withCompletion = false): Collection
     {
         return $this->credits($child)->whereNotIn('credits.id', DB::table('payout_items')->select('credit_id'))
+            ->when($withCompletion, fn (Builder $query) => $query->addSelect(['completed_at' => DB::table('mission_submissions')
+                ->whereColumn('occurrence_id', 'credits.occurrence_id')->where('decision', 'approved')
+                ->latest('submitted_at')->latest('id')->limit(1)->select('submitted_at')]))
             ->when($before, fn (Builder $query) => $query->where('approved_at', '<', $before))->get();
     }
 

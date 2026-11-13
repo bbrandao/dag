@@ -16,8 +16,35 @@ interface Credit {
     amount_cents: number | null;
 }
 
-function PointEntries({ credits, empty }: { credits: AllowanceProps['credits']; empty: string }) {
+function PointsBadge({ points }: { points: number }) {
+    return <Badge className="px-3 py-1.5">{points} {points === 1 ? 'ponto' : 'pontos'}</Badge>;
+}
+
+function ValueBadge({ cents }: { cents: number | null }) {
+    return <Badge className="bg-[#ccf1d7] px-3 py-1.5 text-[#1b5632]">
+        {cents === null ? 'Aguardando taxa' : money(cents)}
+    </Badge>;
+}
+
+function PointEntries({ credits, empty, statement = false }: { credits: AllowanceProps['credits']; empty: string; statement?: boolean }) {
     if (credits.length === 0) return <p>{empty}</p>;
+
+    if (statement) {
+        return <div className="divide-y divide-solid divide-dag-line">
+            {credits.map(credit => (
+                <article className="grid gap-1 py-3 first:pt-0 last:pb-0" key={credit.id}>
+                    <div className="text-sm text-dag-muted">
+                        {credit.completed_at ?? `Aprovada em ${credit.approved_at}`}
+                    </div>
+                    <strong>{credit.title}</strong>
+                    <div className="flex flex-wrap gap-2">
+                        <PointsBadge points={credit.points} />
+                        <ValueBadge cents={credit.amount_cents} />
+                    </div>
+                </article>
+            ))}
+        </div>;
+    }
 
     return credits.map(credit => (
         <article className="ledger-entry" key={credit.id}>
@@ -38,7 +65,7 @@ interface AllowanceProps {
     rates: { id: number; cents_per_point: number; effective_at: string }[];
     preview: { request_id: string; fingerprint: string; points: number; amount_cents: number } | null;
     months: { month: string; points: number; earned_cents: number; unpriced: boolean; paid_cents: number }[];
-    credits: (Credit & { approved_at: string })[];
+    credits: (Credit & { approved_at: string; completed_at: string | null })[];
     payouts: { id: string; competence: string | null; points: number; amount_cents: number;
         created_at: string; paid_at: string | null; items: Credit[] }[];
 }
@@ -54,9 +81,9 @@ export default function Allowance(props: AllowanceProps) {
     useEffect(() => {
         const section = window.location.hash.slice(1);
         const target = document.getElementById(section);
-        if (target instanceof HTMLDetailsElement) target.open = true;
+        if (!isGuardian && target instanceof HTMLDetailsElement) target.open = true;
         target?.scrollIntoView();
-    }, []);
+    }, [isGuardian]);
 
     function close() {
         if (!preview || !window.confirm(`Gerar mesada de ${money(preview.amount_cents)} com ${preview.points} pontos?`)) return;
@@ -77,10 +104,8 @@ export default function Allowance(props: AllowanceProps) {
                     {child.name}
                 </h2>
                 <div className="flex flex-wrap justify-between gap-2">
-                    <Badge className="px-3 py-1.5">{props.availablePoints} {props.availablePoints === 1 ? 'ponto' : 'pontos'}</Badge>
-                    <Badge className="ml-auto bg-[#ccf1d7] px-3 py-1.5 text-[#1b5632]">
-                        {props.unpriced ? 'Aguardando taxa' : money(props.availableCents)}
-                    </Badge>
+                    <PointsBadge points={props.availablePoints} />
+                    <div className="ml-auto"><ValueBadge cents={props.unpriced ? null : props.availableCents} /></div>
                 </div>
                 <dl className="m-0 grid grid-cols-2 gap-2">
                     <div className="grid min-w-0 content-center gap-1 rounded-xl bg-[#ffe4a5] p-2 text-center text-sm text-[#694305]">
@@ -101,9 +126,10 @@ export default function Allowance(props: AllowanceProps) {
                     <h2>Encerrar ciclo de mesada</h2>
                     <p>Na virada do mês, o DAG fecha automaticamente o saldo do mês anterior. Você também pode fechar o saldo do mês atual.</p>
                     {preview ? (
-                        <>
-                            <p>{preview.points} pontos serão movidos para uma conta de {money(preview.amount_cents)} a receber.</p>
-                        </>
+                        <div className="mb-4 flex flex-wrap gap-2" aria-label="Saldo a encerrar">
+                            <PointsBadge points={preview.points} />
+                            <ValueBadge cents={preview.amount_cents} />
+                        </div>
                     ) : (
                         <p>{rates.length === 0
                             ? <>Defina o <Link href="/guardian/configuracoes">valor do ponto em Configurações</Link> para fechar a mesada.</>
@@ -144,7 +170,7 @@ export default function Allowance(props: AllowanceProps) {
             </details>
             <details className="card group scroll-mt-20" id="evolucao">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
-                    <h2 className="m-0">Evolução nos últimos 6 meses</h2><ChevronDown size={19} className="shrink-0 text-dag-purple group-open:rotate-180" aria-hidden="true" />
+                    <h2 className="m-0">{isGuardian ? 'Últimos 6 meses' : 'Evolução nos últimos 6 meses'}</h2><ChevronDown size={19} className="shrink-0 text-dag-purple group-open:rotate-180" aria-hidden="true" />
                 </summary>
                 <div className="mt-4">
                     <div className="point-trend" aria-hidden="true">
@@ -174,12 +200,12 @@ export default function Allowance(props: AllowanceProps) {
             {isGuardian ? <dialog ref={statement} aria-labelledby="points-statement-title"
                 className="fixed inset-0 m-auto h-[70dvh] w-[80vw] max-w-none overflow-hidden rounded-2xl border border-solid border-dag-line bg-white p-0 text-dag-ink shadow-xl backdrop:bg-dag-ink/55">
                 <div className="flex h-full min-h-0 flex-col">
-                    <header className="flex flex-wrap items-center justify-between gap-2 border-0 border-b border-solid border-dag-line p-4">
-                        <h2 id="points-statement-title" className="m-0 text-lg">Extrato de Pontos</h2>
-                        <Button type="button" autoFocus className="cursor-pointer" onClick={() => statement.current?.close()}>Fechar</Button>
+                    <header className="flex items-center justify-between gap-2 p-4">
+                        <h2 id="points-statement-title" className="m-0! text-lg">Extrato de Pontos</h2>
+                        <Button type="button" autoFocus className="shrink-0 cursor-pointer" onClick={() => statement.current?.close()}>Fechar</Button>
                     </header>
                     <div className="min-h-0 flex-1 overflow-y-auto p-4" tabIndex={0} role="region" aria-label="Pontos fora de ciclos encerrados">
-                        <PointEntries credits={credits} empty="Nenhum ponto disponível fora de um ciclo encerrado." />
+                        <PointEntries statement credits={credits} empty="Nenhum ponto disponível fora de um ciclo encerrado." />
                     </div>
                 </div>
             </dialog> : <section className="card">

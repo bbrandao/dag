@@ -63,8 +63,11 @@ final class AllowanceTest extends TestCase
         $this->patch("{$url}/contas/{$payout->id}/paga")->assertRedirect($url);
         $this->assertSame($paidAt, DB::table('payouts')->value('paid_at'));
         $newCredit = DB::table('point_credits')->where('occurrence_id', $new)->value('id');
+        DB::table('mission_submissions')->where('occurrence_id', $new)->where('decision', 'approved')
+            ->update(['submitted_at' => '2026-11-01 15:45:00']);
         $this->get($url)->assertInertia(fn (Assert $page) => $page
             ->has('credits', 1)->where('credits.0.id', $newCredit)->where('credits.0.amount_cents', 200)
+            ->where('credits.0.completed_at', '01/11/2026 12:45')->where('credits.0.approved_at', '01/11/2026 13:00')
             ->where('pendingCents', 0)->where('paidCents', 200));
         $this->get('/app')->assertInertia(fn (Assert $page) => $page->component('Dashboard')
             ->where('rateCents', 20)->has('progress', 1)->where('progress.0.id', $child->id)
