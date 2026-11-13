@@ -24,7 +24,14 @@ final class TaskController
     {
         $this->tasks->save($request->user(), $request->validated());
 
-        return redirect()->route('guardian.tasks');
+        return redirect()->route($request->query('from') === 'new' ? 'guardian.tasks.create' : 'guardian.tasks');
+    }
+
+    public function create(Request $request): Response
+    {
+        Inertia::encryptHistory();
+
+        return Inertia::render('NewTask', $this->tasks->formData($request->user()));
     }
 
     public function update(SaveTaskRequest $request, string $task): RedirectResponse

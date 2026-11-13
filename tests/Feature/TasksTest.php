@@ -24,7 +24,12 @@ final class TasksTest extends TestCase
     public function test_daily_mission_uses_local_weekday_and_weekend_times_and_expires_at_the_deadline(): void
     {
         [$guardian, $child] = $this->family();
-        $this->as($guardian)->post('/guardian/tasks', $this->task($child))->assertRedirect('/guardian/tasks');
+        $this->as($guardian)->get('/guardian/tasks/nova')->assertInertia(fn (Assert $page) => $page
+            ->component('NewTask')->where('children.0.id', $child->id)->missing('tasks'));
+        $this->from('/guardian/tasks/nova')->post('/guardian/tasks?from=new', $this->task($child, ['title' => '']))
+            ->assertRedirect('/guardian/tasks/nova')->assertSessionHasErrors('title');
+        $this->post('/guardian/tasks?from=new', $this->task($child))->assertRedirect('/guardian/tasks/nova')->assertSessionHasNoErrors();
+        $this->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page->component('Tasks')->has('tasks', 1));
 
         $this->as($child)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
             ->component('Missions')->has('missions', 1)

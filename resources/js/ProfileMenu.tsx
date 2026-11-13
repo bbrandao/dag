@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover
 import { Switch } from './components/ui/switch';
 import { Toast, useToast } from './components/ui/toast';
 import { requestPreference } from './requestPreference';
+import { nameInitials } from './tasks';
 import type { useDagInstall } from './useDagInstall';
 import { usePushPreferences } from './usePushPreferences';
 
@@ -18,13 +19,6 @@ export interface Viewer {
     relationship: string | null;
     whatsappNotices: boolean;
     pushPublicKey: string | null;
-}
-
-function initials(name: string) {
-    const parts = name.trim().split(/\s+/);
-    const first = Array.from(parts[0])[0] ?? '';
-    const last = parts.length > 1 ? Array.from(parts[parts.length - 1])[0] ?? '' : '';
-    return `${first}${last}`.toLocaleUpperCase('pt-BR');
 }
 
 export function ProfileMenu({ viewer, installation, side, open, onOpenChange }: {
@@ -63,7 +57,7 @@ export function ProfileMenu({ viewer, installation, side, open, onOpenChange }: 
         <Popover open={open} onOpenChange={onOpenChange}>
             <PopoverTrigger asChild>
                 <Button type="button" aria-label={`Perfil de ${viewer.name}`} className="size-11 cursor-pointer bg-white px-0">
-                    <Avatar aria-hidden="true"><AvatarFallback>{initials(viewer.name)}</AvatarFallback></Avatar>
+                    <Avatar aria-hidden="true"><AvatarFallback>{nameInitials(viewer.name)}</AvatarFallback></Avatar>
                 </Button>
             </PopoverTrigger>
             <PopoverContent side={side} aria-label="Perfil" className="w-68">

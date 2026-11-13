@@ -20,9 +20,8 @@ final class TaskService
 
     public function dashboard(User $guardian): array
     {
-        abort_unless($guardian->role === User::GUARDIAN, 403);
-
-        $children = $this->families->childrenForDashboard($guardian);
+        $data = $this->formData($guardian);
+        $children = $data['children'];
         $tasks = $this->tasks->forGuardian($guardian, $children->pluck('id'))
             ->map(fn (TaskTemplate $task) => [
                 ...$task->only(['id', 'title', 'criteria', 'points', 'frequency', 'schedule', 'starts_on', 'photo_mode']),
@@ -33,9 +32,15 @@ final class TaskService
                 'can_manage' => $task->children->count() === $task->active_children_count,
             ]);
 
+        return ['tasks' => $tasks, ...$data];
+    }
+
+    public function formData(User $guardian): array
+    {
+        abort_unless($guardian->role === User::GUARDIAN, 403);
+
         return [
-            'tasks' => $tasks,
-            'children' => $children,
+            'children' => $this->families->childrenForDashboard($guardian),
             'today' => now($guardian->family->timezone)->toDateString(),
         ];
     }

@@ -9,13 +9,14 @@ import Inbox from './pages/Inbox';
 import Login from './pages/Login';
 import Missions from './pages/Missions';
 import Mission from './pages/Mission';
+import NewTask from './pages/NewTask';
 import Reviews from './pages/Reviews';
 import Settings from './pages/Settings';
 import Tasks from './pages/Tasks';
 import '../css/app.css';
 import '../css/navigation.css';
 
-const pages = { Allowance, Children, Dashboard, EditChild, Inbox, Login, Mission, Missions, Reviews, Settings, Tasks };
+const pages = { Allowance, Children, Dashboard, EditChild, Inbox, Login, Mission, Missions, NewTask, Reviews, Settings, Tasks };
 
 void createInertiaApp({
     title: title => `${title} · DAG`,

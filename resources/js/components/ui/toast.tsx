@@ -19,7 +19,11 @@ export function useToast() {
     return { toast, setToast };
 }
 
-export function Toast({ message, container }: { message: ToastMessage | null; container?: HTMLElement | null }) {
+export function Toast({ message, container, onConfirm }: {
+    message: ToastMessage | null;
+    container?: HTMLElement | null;
+    onConfirm?: () => void;
+}) {
     if (!message) return null;
     const Icon = message.success ? Check : CircleAlert;
 
@@ -30,6 +34,7 @@ export function Toast({ message, container }: { message: ToastMessage | null; co
             }`}>
                 <Icon aria-hidden="true" className="size-5 shrink-0" />
                 {message.text}
+                {onConfirm && <button type="button" autoFocus className="pointer-events-auto" onClick={onConfirm}>OK</button>}
             </div>
         </div>, container ?? document.body,
     );

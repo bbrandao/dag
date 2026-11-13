@@ -1,251 +1,137 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { useRef, useState, type FormEvent } from 'react';
-import { type Frequency, formatDate, frequencies, months, weekDays } from '../tasks';
+import { ArrowLeft, CalendarDays, ChevronDown, Clock, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { Avatar, AvatarFallback } from '../components/ui/avatar';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import { formatDate, frequencies, months, nameInitials, weekDays, type Frequency } from '../tasks';
+import TaskForm, { type Task, type TaskFormData } from './TaskForm';
 
-interface Task {
-    id: string;
-    title: string;
-    criteria: string;
-    points: number;
-    frequency: Frequency;
-    schedule: { days?: number[]; day?: number | null; month?: number };
-    starts_on: string;
-    weekday_time: string;
-    weekend_time: string;
-    photo_mode: string;
-    children: string[];
-    child_ids: string[];
-    can_manage: boolean;
+const pointsFormat = new Intl.NumberFormat('pt-BR');
+const photoLabels: Record<string, string> = { optional: 'Opcional', required: 'Obrigatória', disabled: 'Desativada' };
+
+function searchText(text: string) {
+    return text.trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/\p{Diacritic}/gu, '');
 }
 
 function scheduleLabel(task: Task) {
     const { days, day, month } = task.schedule;
 
     switch (task.frequency) {
-        case 'daily': return days?.map(value => weekDays[value - 1]).join(', ');
+        case 'daily': return days?.length === 7 ? 'Todos os dias' : [...(days ?? [])].sort((a, b) => a - b)
+            .map(value => weekDays[value - 1]).join(', ');
         case 'weekly': return day ? weekDays[day - 1] : '';
-        case 'monthly': return day ? `Dia ${day}` : 'Último dia do mês';
-        case 'yearly': return month ? `Dia ${day} de ${months[month - 1].toLowerCase()}` : '';
+        case 'monthly': return day ? 'Dia ' + day : 'Último dia do mês';
+        case 'yearly': return month ? 'Dia ' + day + ' de ' + months[month - 1].toLocaleLowerCase('pt-BR') : '';
     }
 }
 
-export default function Tasks({ tasks, children, today }: {
-    tasks: Task[];
-    children: { id: string; name: string }[];
-    today: string;
-}) {
+export default function Tasks({ tasks, children, today }: TaskFormData & { tasks: Task[] }) {
     const [editing, setEditing] = useState<string | null>(null);
     const [notice, setNotice] = useState('');
-    const titleInput = useRef<HTMLInputElement>(null);
-    const initial = {
-        title: '',
-        criteria: '',
-        points: 10,
-        frequency: 'daily' as Frequency,
-        starts_on: today,
-        weekday_time: '19:00',
-        weekend_time: '19:00',
-        daily_days: [1, 2, 3, 4, 5, 6, 7],
-        weekly_day: 1,
-        month_day: '',
-        year_month: 1,
-        child_ids: children.length === 1 ? [children[0].id] : [] as string[],
-        photo_mode: 'optional',
-    };
-    const form = useForm(initial);
+    const [title, setTitle] = useState('');
+    const [frequency, setFrequency] = useState<Frequency | ''>('');
+    const [childId, setChildId] = useState('');
     const removal = useForm({});
-    const errors = Object.values(form.errors).flat();
-
-    function resetEditor() {
-        setEditing(null);
-        form.setData(initial);
-        form.clearErrors();
-    }
-
-    function editTask(task: Task) {
-        setEditing(task.id);
-        setNotice('');
-        form.clearErrors();
-        form.setData({
-            ...initial,
-            title: task.title,
-            criteria: task.criteria,
-            points: task.points,
-            frequency: task.frequency,
-            starts_on: task.starts_on,
-            weekday_time: task.weekday_time,
-            weekend_time: task.weekend_time,
-            daily_days: task.schedule.days ?? initial.daily_days,
-            weekly_day: task.frequency === 'weekly' ? task.schedule.day ?? 1 : 1,
-            month_day: task.frequency === 'monthly' || task.frequency === 'yearly' ? String(task.schedule.day ?? '') : '',
-            year_month: task.schedule.month ?? 1,
-            child_ids: task.child_ids,
-            photo_mode: task.photo_mode,
-        });
-        titleInput.current?.focus();
-    }
-
-    function saveTask(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        setNotice('');
-
-        if (editing) {
-            form.patch(`/guardian/tasks/${editing}`, { onSuccess: () => {
-                resetEditor();
-                setNotice('Tarefa atualizada. As missões abertas mantêm as condições anteriores.');
-            } });
-        } else {
-            form.post('/guardian/tasks', { onSuccess: () => {
-                form.reset('title', 'criteria');
-                setNotice('Tarefa cadastrada.');
-            } });
-        }
-    }
+    const query = searchText(title);
+    const filtered = tasks.filter(task => searchText(task.title).includes(query)
+        && (!frequency || task.frequency === frequency)
+        && (!childId || task.child_ids.includes(childId)));
+    const total = filtered.reduce((sum, task) => sum + task.points, 0);
+    const pointsLabel = total === 1 ? 'ponto' : 'pontos';
 
     function removeTask(task: Task) {
-        if (!window.confirm(`Excluir “${task.title}”? Ela deixará de gerar novas missões.`)) return;
-
+        if (removal.processing || !window.confirm('Excluir “' + task.title + '”? Ela deixará de gerar novas missões.')) return;
         setNotice('');
-        removal.delete(`/guardian/tasks/${task.id}`, { preserveScroll: true, onSuccess: () => {
-            if (editing === task.id) resetEditor();
+        removal.delete('/guardian/tasks/' + task.id, { preserveScroll: true, onSuccess: () => {
+            if (editing === task.id) setEditing(null);
             setNotice('Tarefa excluída. As missões já abertas foram preservadas.');
         } });
     }
 
-    return (
-        <main className="screen">
-            <Head title="Tarefas" />
-            <header className="topbar">
-                <h1>Tarefas</h1>
-                <Link className="button secondary" href="/app">Voltar</Link>
-            </header>
-            <section className="card" aria-labelledby="new-task">
-                <h2 id="new-task">{editing ? 'Editar tarefa' : 'Nova tarefa'}</h2>
-                {notice && <p role="status">{notice}</p>}
-                {children.length === 0 ? (
-                    <p><Link href="/app">Cadastre um perfil infantil</Link> para atribuir tarefas.</p>
-                ) : (
-                    <form onSubmit={saveTask}>
-                        <label htmlFor="title">Nome da tarefa</label>
-                        <input id="title" ref={titleInput} value={form.data.title} maxLength={120} required
-                            placeholder="Arrumar a cama" onChange={event => form.setData('title', event.target.value)} />
-                        <label htmlFor="criteria">Como saber se está pronta?</label>
-                        <textarea id="criteria" value={form.data.criteria} maxLength={1000} rows={3} required
-                            placeholder="Coberta dobrada e travesseiro no lugar."
-                            onChange={event => form.setData('criteria', event.target.value)} />
-                        <fieldset className="options">
-                            <legend>Atribuir a</legend>
-                            {children.map(child => (
-                                <label className="check" key={child.id}>
-                                    <input type="checkbox" checked={form.data.child_ids.includes(child.id)}
-                                        onChange={event => form.setData('child_ids', event.target.checked
-                                            ? [...form.data.child_ids, child.id]
-                                            : form.data.child_ids.filter(id => id !== child.id))} />
-                                    {child.name}
-                                </label>
-                            ))}
-                        </fieldset>
-                        <div className="field-grid">
-                            <label>Pontos
-                                <input type="number" min={1} max={100000} required value={form.data.points || ''}
-                                    onChange={event => form.setData('points', Number(event.target.value))} />
-                            </label>
-                            <label>Data de início
-                                <input type="date" required value={form.data.starts_on}
-                                    onChange={event => form.setData('starts_on', event.target.value)} />
-                            </label>
-                        </div>
-                        <label htmlFor="frequency">Periodicidade</label>
-                        <select id="frequency" value={form.data.frequency}
-                            onChange={event => form.setData('frequency', event.target.value as Frequency)}>
-                            {Object.entries(frequencies).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                        </select>
-                        {form.data.frequency === 'daily' && (
-                            <fieldset className="options">
-                                <legend>Dias em que a missão aparece</legend>
-                                <div className="days">
-                                    {weekDays.map((day, index) => (
-                                        <label key={day} className="check">
-                                            <input type="checkbox" checked={form.data.daily_days.includes(index + 1)}
-                                                onChange={event => form.setData('daily_days', event.target.checked
-                                                    ? [...form.data.daily_days, index + 1].sort((a, b) => a - b)
-                                                    : form.data.daily_days.filter(value => value !== index + 1))} />
-                                            {day}
-                                        </label>
-                                    ))}
-                                </div>
-                            </fieldset>
-                        )}
-                        {form.data.frequency === 'weekly' && (
-                            <label>Dia da semana
-                                <select value={form.data.weekly_day}
-                                    onChange={event => form.setData('weekly_day', Number(event.target.value))}>
-                                    {weekDays.map((day, index) => <option key={day} value={index + 1}>{day}</option>)}
-                                </select>
-                            </label>
-                        )}
-                        {form.data.frequency === 'yearly' && (
-                            <label>Mês
-                                <select value={form.data.year_month}
-                                    onChange={event => form.setData('year_month', Number(event.target.value))}>
-                                    {months.map((month, index) => <option key={month} value={index + 1}>{month}</option>)}
-                                </select>
-                            </label>
-                        )}
-                        {(form.data.frequency === 'monthly' || form.data.frequency === 'yearly') && (
-                            <label>{form.data.frequency === 'monthly' ? 'Dia do mês (em branco para o último dia)' : 'Dia do mês'}
-                                <input type="number" min={1} max={31} required={form.data.frequency === 'yearly'}
-                                    value={form.data.month_day} onChange={event => form.setData('month_day', event.target.value)} />
-                            </label>
-                        )}
-                        <div className="field-grid">
-                            <label>Prazo de segunda a sexta
-                                <input type="time" required value={form.data.weekday_time}
-                                    onChange={event => form.setData('weekday_time', event.target.value)} />
-                            </label>
-                            <label>Prazo aos sábados e domingos
-                                <input type="time" required value={form.data.weekend_time}
-                                    onChange={event => form.setData('weekend_time', event.target.value)} />
-                            </label>
-                        </div>
-                        <label htmlFor="photo-mode">Foto na entrega</label>
-                        <select id="photo-mode" value={form.data.photo_mode}
-                            onChange={event => form.setData('photo_mode', event.target.value)}>
-                            <option value="optional">Opcional</option>
-                            <option value="required">Obrigatória</option>
-                            <option value="disabled">Desativada</option>
-                        </select>
-                        {errors.length > 0 && (
-                            <ul className="error" role="alert">{errors.map((error, index) => <li key={index}>{error}</li>)}</ul>
-                        )}
-                        <button disabled={form.processing} type="submit">{editing ? 'Salvar alterações' : 'Cadastrar tarefa'}</button>
-                        {editing && <button className="secondary" type="button" disabled={form.processing}
-                            onClick={resetEditor}>Cancelar edição</button>}
-                    </form>
-                )}
-            </section>
-            <section aria-labelledby="registered-tasks">
+    return <main className="screen">
+        <Head title="Tarefas" />
+        <header className="topbar flex-wrap">
+            <h1>Tarefas</h1>
+            <div className="flex flex-wrap gap-2">
+                <Button asChild><Link href="/app"><ArrowLeft size={17} aria-hidden="true" /> Voltar</Link></Button>
+                <Button asChild className="bg-dag-purple text-white hover:bg-[#452497]">
+                    <Link href="/guardian/tasks/nova"><Plus size={17} aria-hidden="true" /> Novo</Link>
+                </Button>
+            </div>
+        </header>
+        <section className="card" aria-labelledby="task-filters">
+            <h2 id="task-filters">Filtros</h2>
+            <label htmlFor="task-title-filter">Título</label>
+            <input id="task-title-filter" type="search" value={title} onChange={event => setTitle(event.target.value)} />
+            <div className="field-grid mt-3">
+                <label>Periodicidade
+                    <select value={frequency} onChange={event => setFrequency(event.target.value as Frequency | '')}>
+                        <option value="">Todas</option>
+                        {Object.entries(frequencies).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                    </select>
+                </label>
+                <label>Filho
+                    <select value={childId} onChange={event => setChildId(event.target.value)}>
+                        <option value="">Todos</option>
+                        {children.map(child => <option key={child.id} value={child.id}>{child.name}</option>)}
+                    </select>
+                </label>
+            </div>
+        </section>
+        {notice && <p role="status">{notice}</p>}
+        <section aria-labelledby="registered-tasks">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 id="registered-tasks">Tarefas cadastradas</h2>
-                {tasks.length === 0 && <p>Nenhuma tarefa cadastrada.</p>}
-                {tasks.map(task => (
-                    <article className="card" key={task.id}>
-                        <p className="tag">{frequencies[task.frequency]} · {task.points} pontos</p>
-                        <h3>{task.title}</h3>
+                <Badge className="px-3 py-1.5" aria-live="polite">Total: {pointsFormat.format(total)} {pointsLabel}</Badge>
+            </div>
+            {filtered.length === 0 && <p>{tasks.length ? 'Nenhuma tarefa corresponde aos filtros.' : 'Nenhuma tarefa cadastrada.'}</p>}
+            {filtered.map(task => (
+                <details className="card group" key={task.id}>
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                        <span className="grid min-w-0 justify-items-start gap-2 wrap-anywhere">
+                            <Badge className="bg-dag-lilac px-2 py-1">{frequencies[task.frequency]} · {task.points} {task.points === 1 ? 'ponto' : 'pontos'}</Badge>
+                            <strong className="text-lg">{task.title}</strong>
+                        </span>
+                        <ChevronDown className="shrink-0 text-dag-purple group-open:rotate-180" aria-hidden="true" size={20} />
+                    </summary>
+                    <div className="mt-4 border-0 border-t border-solid border-dag-line pt-4">
                         <p className="criteria">{task.criteria}</p>
-                        <p>{scheduleLabel(task)} · A partir de {formatDate(task.starts_on)}</p>
-                        <p>Seg–sex até {task.weekday_time} · Sáb–dom até {task.weekend_time}</p>
-                        <p>{task.children.join(', ')}</p>
-                        {task.can_manage && (
-                            <div className="filters">
-                                <button className="secondary" type="button" disabled={form.processing || removal.processing}
-                                    onClick={() => editTask(task)}>Editar</button>
-                                <button className="secondary" type="button" disabled={form.processing || removal.processing}
-                                    onClick={() => removeTask(task)}>Excluir</button>
-                            </div>
-                        )}
-                    </article>
-                ))}
-            </section>
-        </main>
-    );
+                        <p><strong>Periodicidade:</strong> {scheduleLabel(task)}</p>
+                        <div className="mb-4 grid grid-cols-2 items-start gap-2">
+                            <Badge className="gap-1.5 bg-dag-lilac px-2 py-1.5 leading-snug">
+                                <Clock size={15} className="shrink-0" aria-hidden="true" /> Seg a Sex até {task.weekday_time}
+                            </Badge>
+                            <Badge className="gap-1.5 bg-dag-lilac px-2 py-1.5 leading-snug">
+                                <Clock size={15} className="shrink-0" aria-hidden="true" /> Sáb e Dom até {task.weekend_time}
+                            </Badge>
+                        </div>
+                        <p className="flex items-center gap-2"><CalendarDays size={17} aria-hidden="true" /> Em vigor desde {formatDate(task.starts_on)}</p>
+                        <p>Foto na entrega: {photoLabels[task.photo_mode]}</p>
+                        <ul className="mb-4 flex list-none flex-wrap gap-3 p-0" aria-label="Filhos atribuídos">
+                            {task.children.map((name, index) => <li key={task.child_ids[index]} className="flex items-center gap-2">
+                                <Avatar aria-hidden="true"><AvatarFallback>{nameInitials(name)}</AvatarFallback></Avatar>
+                                {name}
+                            </li>)}
+                        </ul>
+                        {task.can_manage && (editing === task.id
+                            ? <TaskForm task={task} children={children} today={today} onCancel={() => setEditing(null)}
+                                onSaved={() => {
+                                    setEditing(null);
+                                    setNotice('Tarefa atualizada. As missões abertas mantêm as condições anteriores.');
+                                }}
+                                onFailure={() => setNotice('Não foi possível atualizar a tarefa. Confira os dados e tente novamente.')} />
+                            : <div className="flex flex-wrap gap-2">
+                                <Button type="button" className="cursor-pointer" disabled={removal.processing} onClick={() => {
+                                    setEditing(task.id);
+                                    setNotice('');
+                                }}>Editar</Button>
+                                <Button type="button" className="cursor-pointer bg-red-50 text-red-800 hover:bg-red-100" disabled={removal.processing}
+                                    onClick={() => removeTask(task)}>Excluir</Button>
+                            </div>)}
+                    </div>
+                </details>
+            ))}
+        </section>
+    </main>;
 }
