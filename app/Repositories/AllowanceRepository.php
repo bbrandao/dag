@@ -28,7 +28,7 @@ final class AllowanceRepository
 
     public function rateHistory(string $familyId): Collection
     {
-        return $this->rates($familyId)->get(['id', 'cents_per_point', 'effective_at']);
+        return $this->rates($familyId)->get(['id', 'cents_per_point', 'effective_at', 'recorded_at']);
     }
 
     public function hasRate(string $familyId): bool

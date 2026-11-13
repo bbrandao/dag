@@ -7,6 +7,7 @@ use App\Http\Controllers\MissionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\OtpController;
 use App\Http\Controllers\PushController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,6 +23,8 @@ Route::middleware('guest')->group(function (): void {
 Route::middleware(['auth', 'active.account'])->group(function (): void {
     Route::get('/app', DashboardController::class)->name('dashboard');
     Route::post('/logout', [OtpController::class, 'logout'])->block();
+    Route::get('/guardian/configuracoes', [SettingsController::class, 'show'])->name('settings');
+    Route::post('/guardian/configuracoes/valor-do-ponto', [SettingsController::class, 'saveRate']);
     Route::get('/guardian/children', [ChildController::class, 'index'])->name('children.index');
     Route::post('/guardian/children', [ChildController::class, 'store']);
     Route::get('/guardian/children/{child}/editar', [ChildController::class, 'edit'])->whereUuid('child')->name('children.edit');

@@ -1,5 +1,5 @@
 import { Link, router, useForm } from '@inertiajs/react';
-import { Download, LogOut, Users } from 'lucide-react';
+import { Download, LogOut, Settings, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { Badge } from './components/ui/badge';
@@ -76,6 +76,12 @@ export function ProfileMenu({ viewer, installation, side, open, onOpenChange }: 
                     <Button asChild className="w-full justify-start bg-white hover:bg-dag-lilac">
                         <Link href="/guardian/children" onClick={() => onOpenChange(false)}>
                             <Users aria-hidden="true" size={17} /> Filhos
+                        </Link>
+                    </Button>
+                    <hr className="my-2 border-0 border-t border-solid border-dag-line" />
+                    <Button asChild className="w-full justify-start bg-white hover:bg-dag-lilac">
+                        <Link href="/guardian/configuracoes" onClick={() => onOpenChange(false)}>
+                            <Settings aria-hidden="true" size={17} /> Configurações
                         </Link>
                     </Button>
                     <hr className="my-2 border-0 border-t border-solid border-dag-line" />

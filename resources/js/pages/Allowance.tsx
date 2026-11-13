@@ -1,8 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { useEffect, type FormEvent } from 'react';
+import { useEffect } from 'react';
+import { money } from '../money';
 
-const reais = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const money = (cents: number) => reais.format(cents / 100);
 const monthLabel = (value: string) => `${value.slice(5, 7)}/${value.slice(0, 4)}`;
 
 interface Credit {
@@ -31,7 +30,6 @@ interface AllowanceProps {
 export default function Allowance(props: AllowanceProps) {
     const { child, isGuardian, rates, preview, payouts, months, credits } = props;
     const endpoint = `/guardian/mesadas/${child.id}`;
-    const rate = useForm({ cents_per_point: rates[0]?.cents_per_point ?? 10 });
     const closing = useForm({ request_id: '', fingerprint: '' });
     const payment = useForm({});
     const largestMonth = Math.max(1, ...months.map(month => month.points));
@@ -40,11 +38,6 @@ export default function Allowance(props: AllowanceProps) {
         const section = window.location.hash.slice(1);
         document.getElementById(section)?.scrollIntoView();
     }, []);
-
-    function setRate(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        rate.post(`${endpoint}/conversao`, { preserveScroll: true });
-    }
 
     function close() {
         if (!preview || !window.confirm(`Gerar mesada de ${money(preview.amount_cents)} com ${preview.points} pontos?`)) return;
@@ -66,40 +59,21 @@ export default function Allowance(props: AllowanceProps) {
                 <p><strong>{money(props.paidCents)}</strong> já recebido</p>
             </section>
             {isGuardian && (
-                <>
-                    <section className="card" id="conversao">
-                        <h2>Configurar valor do ponto</h2>
-                        <p>A primeira taxa também dá valor aos pontos já aprovados. As alterações seguintes valem para novas missões.</p>
-                        <form onSubmit={setRate}>
-                            <label htmlFor="conversion">Centavos por ponto</label>
-                            <input id="conversion" type="number" min={1} max={100000} required
-                                value={rate.data.cents_per_point || ''}
-                                onChange={event => rate.setData('cents_per_point', Number(event.target.value))} />
-                            <p>1 ponto = {money(rate.data.cents_per_point)}</p>
-                            <p className="error" role="alert">{rate.errors.cents_per_point}</p>
-                            <button disabled={rate.processing}>Salvar taxa</button>
-                            {rate.recentlySuccessful && <p role="status">Taxa salva.</p>}
-                        </form>
-                        {rates.length > 0 && <details><summary>Histórico de taxas</summary>
-                            <ul>{rates.map(item => <li key={item.id}>{money(item.cents_per_point)} por ponto · {item.effective_at}</li>)}</ul>
-                        </details>}
-                    </section>
-                    <section className="card" id="fechamento">
-                        <h2>Encerrar ciclo de mesada</h2>
-                        <p>Na virada do mês, o DAG fecha automaticamente o saldo do mês anterior. Você também pode fechar o saldo do mês atual.</p>
-                        {preview ? (
-                            <>
-                                <p>{preview.points} pontos serão movidos para uma conta de {money(preview.amount_cents)} a receber.</p>
-                                <button type="button" disabled={closing.processing} onClick={close}>Encerrar ciclo e gerar conta</button>
-                            </>
-                        ) : (
-                            <p>{rates.length === 0
-                                ? 'Configure o valor do ponto para fechar a mesada.'
-                                : 'O ciclo fica disponível quando houver pontos aprovados do mês atual fora de uma mesada.'}</p>
-                        )}
-                        <p className="error" role="alert">{closing.errors.fingerprint}</p>
-                    </section>
-                </>
+                <section className="card" id="fechamento">
+                    <h2>Encerrar ciclo de mesada</h2>
+                    <p>Na virada do mês, o DAG fecha automaticamente o saldo do mês anterior. Você também pode fechar o saldo do mês atual.</p>
+                    {preview ? (
+                        <>
+                            <p>{preview.points} pontos serão movidos para uma conta de {money(preview.amount_cents)} a receber.</p>
+                            <button type="button" disabled={closing.processing} onClick={close}>Encerrar ciclo e gerar conta</button>
+                        </>
+                    ) : (
+                        <p>{rates.length === 0
+                            ? <>Defina o <Link href="/guardian/configuracoes">valor do ponto em Configurações</Link> para fechar a mesada.</>
+                            : 'O ciclo fica disponível quando houver pontos aprovados do mês atual fora de uma mesada.'}</p>
+                    )}
+                    <p className="error" role="alert">{closing.errors.fingerprint}</p>
+                </section>
             )}
             <section className="card">
                 <h2>Mesadas</h2>

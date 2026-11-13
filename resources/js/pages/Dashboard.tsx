@@ -2,8 +2,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Badge } from '../components/ui/badge';
 import { MissionCard, type MissionSummary } from '../MissionCard';
 
-const reais = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const money = (cents: number) => reais.format(cents / 100);
+import { money } from '../money';
 
 interface Progress {
     id: string;
@@ -23,17 +22,14 @@ interface Progress {
 interface DashboardProps {
     role: 'guardian' | 'child';
     family: string;
-    children: { id: string; name: string }[];
     earnedPoints: number;
     monthLabel: string;
-    rateCents: number | null;
     progress: Progress[];
     childMissions: { missions: MissionSummary[]; today: string } | null;
 }
 
-export default function Dashboard({ role, family, children, earnedPoints, monthLabel, rateCents, progress, childMissions }: DashboardProps) {
+export default function Dashboard({ role, family, earnedPoints, monthLabel, progress, childMissions }: DashboardProps) {
     const isGuardian = role === 'guardian';
-    const firstChild = children[0];
 
     return (
         <main className="screen">
@@ -61,13 +57,6 @@ export default function Dashboard({ role, family, children, earnedPoints, monthL
                     {group.missions.map(mission => <MissionCard key={mission.id} mission={mission} today={childMissions.today} />)}
                 </section>
             ))}
-            {isGuardian && firstChild && (
-                <section className="card">
-                    <h2>Valor de cada ponto</h2>
-                    <p>{rateCents === null ? 'Configure a taxa de conversão para transformar os pontos da família em reais.' : `Taxa da família: 1 ponto = ${money(rateCents)}.`}</p>
-                    <a className="button" href={`/guardian/mesadas/${firstChild.id}#conversao`}>Configurar valor do ponto</a>
-                </section>
-            )}
             <section aria-labelledby="progress-title">
                 <h2 id="progress-title">{isGuardian ? 'Acompanhamento dos filhos' : 'Meu acompanhamento'}</h2>
                 <p>Resumo de {monthLabel}</p>

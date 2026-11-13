@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Repositories\AllowanceRepository;
 use App\Repositories\FamilyRepository;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 final class AllowanceOverview
@@ -24,7 +25,6 @@ final class AllowanceOverview
         $family = $profile->family;
         $now = $this->ledger->now($family);
         $month = $now->startOfMonth();
-        $rates = $this->accounts->rateHistory($family->id);
         $available = $this->accounts->availableCredits($profile);
         $preview = $available->filter(fn ($credit) => CarbonImmutable::parse($credit->approved_at, 'UTC')->gte($month));
         $credits = $this->accounts->creditsSince($profile, $month->subMonths(5)->utc());
@@ -52,9 +52,7 @@ final class AllowanceOverview
             'unpriced' => $available->contains(fn ($credit) => $credit->amount_cents === null),
             'pendingCents' => $payouts->whereNull('paid_at')->sum('amount_cents'),
             'paidCents' => $payouts->whereNotNull('paid_at')->sum('amount_cents'),
-            'rates' => $isGuardian ? $rates->map(fn ($rate) => [
-                'id' => $rate->id, 'cents_per_point' => (int) $rate->cents_per_point, 'effective_at' => $date($rate->effective_at)->format('d/m/Y H:i:s'),
-            ]) : [],
+            'rates' => $isGuardian ? $this->rateHistory($viewer) : [],
             'preview' => $isGuardian && $preview->isNotEmpty() && ! $preview->contains(fn ($credit) => $credit->amount_cents === null) ? [
                 'request_id' => (string) Str::uuid(), 'fingerprint' => $this->ledger->fingerprint($preview),
                 'points' => $preview->sum('points'), 'amount_cents' => $preview->sum('amount_cents'),
@@ -72,6 +70,19 @@ final class AllowanceOverview
                 'items' => $items->get($payout->id, collect()),
             ]),
         ];
+    }
+
+    public function rateHistory(User $guardian): Collection
+    {
+        $timezone = $guardian->family->timezone;
+
+        return $this->accounts->rateHistory($guardian->family_id)->map(fn ($rate) => [
+            'id' => $rate->id,
+            'cents_per_point' => (int) $rate->cents_per_point,
+            'effective_at' => CarbonImmutable::parse($rate->effective_at, 'UTC')->setTimezone($timezone)->format('d/m/Y H:i:s'),
+            'recorded_at' => $rate->recorded_at === null ? null
+                : CarbonImmutable::parse($rate->recorded_at, 'UTC')->setTimezone($timezone)->format('d/m/Y H:i:s'),
+        ]);
     }
 
     public function linkedChild(User $guardian, string $child): User

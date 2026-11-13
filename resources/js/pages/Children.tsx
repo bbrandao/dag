@@ -11,11 +11,13 @@ const nameOrder = new Intl.Collator('pt-BR', { sensitivity: 'base' });
 export default function Children({ children }: { children: (ChildProfile & { age: number })[] }) {
     const dialog = useRef<HTMLDialogElement>(null);
     const [open, setOpen] = useState(false);
+    const [editing, setEditing] = useState<ChildProfile>();
     const { toast, setToast } = useToast();
     const sorted = [...children].sort((left, right) => nameOrder.compare(left.name, right.name));
 
-    function createChild() {
+    function openForm(child?: ChildProfile) {
         setToast(null);
+        setEditing(child);
         setOpen(true);
         dialog.current?.showModal();
     }
@@ -31,7 +33,7 @@ export default function Children({ children }: { children: (ChildProfile & { age
             <h1>Filhos</h1>
             <div className="flex flex-wrap gap-2">
                 <Button asChild><Link href="/app"><ArrowLeft size={17} aria-hidden="true" /> Voltar</Link></Button>
-                <Button type="button" className="cursor-pointer bg-dag-purple text-white hover:bg-[#452497]" onClick={createChild}>
+                <Button type="button" className="cursor-pointer bg-dag-purple text-white hover:bg-[#452497]" onClick={() => openForm()}>
                     <Plus size={17} aria-hidden="true" /> Novo
                 </Button>
             </div>
@@ -46,7 +48,7 @@ export default function Children({ children }: { children: (ChildProfile & { age
                     <dt className="text-dag-muted">Telefone</dt><dd className="m-0">{child.phone}</dd>
                 </dl>
                 <div className="flex flex-wrap gap-2">
-                    <Button asChild><Link href={`/guardian/children/${child.id}/editar`} aria-label={`Editar ${child.name}`}>Editar</Link></Button>
+                    <Button type="button" className="cursor-pointer" aria-label={`Editar ${child.name}`} onClick={() => openForm(child)}>Editar</Button>
                     <Button asChild><Link href={`/guardian/mesadas/${child.id}`} aria-label={`Ver mesadas de ${child.name}`}>Ver mesadas</Link></Button>
                 </div>
             </article>
@@ -57,10 +59,12 @@ export default function Children({ children }: { children: (ChildProfile & { age
             }}
             className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md overflow-visible rounded-2xl border border-solid border-dag-line bg-white p-0 text-dag-ink shadow-xl backdrop:bg-dag-ink/55">
             <div className="max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl p-5">
-                <h2 id="register-child-title">Cadastrar filho</h2>
-                {open && <ChildProfileForm onCancel={close}
-                    onCreated={() => { close(); setToast({ success: true, text: 'Filho cadastrado com sucesso.' }); }}
-                    onFailure={() => setToast({ success: false, text: 'Não foi possível cadastrar. Confira os dados e tente novamente.' })} />}
+                <h2 id="register-child-title">{editing ? 'Editar filho' : 'Cadastrar filho'}</h2>
+                {open && <ChildProfileForm key={editing?.id ?? 'new'} child={editing} onCancel={close}
+                    onSaved={() => { close(); setToast({ success: true, text: editing ? 'Dados atualizados com sucesso.' : 'Filho cadastrado com sucesso.' }); }}
+                    onFailure={() => setToast({ success: false, text: editing
+                        ? 'Não foi possível salvar as alterações. Confira os dados e tente novamente.'
+                        : 'Não foi possível cadastrar. Confira os dados e tente novamente.' })} />}
             </div>
         </dialog>
         <Toast message={toast} container={open ? dialog.current : undefined} />

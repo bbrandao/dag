@@ -49,7 +49,11 @@ final class ChildController
         try {
             $this->profiles->update($guardian, $child, $request->validated());
         } catch (UniqueConstraintViolationException) {
-            return redirect()->route('children.edit', $child)
+            $redirect = $request->query('modal') === '1'
+                ? redirect()->route('children.index')
+                : redirect()->route('children.edit', $child);
+
+            return $redirect
                 ->withErrors(['phone' => 'Esse WhatsApp já está em uso. Informe outro número.']);
         }
 

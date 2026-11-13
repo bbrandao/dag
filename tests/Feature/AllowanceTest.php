@@ -73,6 +73,28 @@ final class AllowanceTest extends TestCase
         $this->get($url)->assertForbidden();
     }
 
+    public function test_guardian_configures_family_point_rate_without_a_child_and_can_see_the_full_history(): void
+    {
+        [$guardian, $child] = $this->family();
+        DB::table('guardian_child_links')->where('guardian_id', $guardian->id)->delete();
+        $url = '/guardian/configuracoes';
+        $this->as($guardian)->get($url)->assertInertia(fn (Assert $page) => $page->component('Settings')->has('rates', 0));
+        $this->from($url)->post("{$url}/valor-do-ponto", ['cents_per_point' => 0])->assertRedirect($url)
+            ->assertSessionHasErrors('cents_per_point');
+
+        foreach ([10, 15, 20, 25] as $cents) {
+            $this->travel(1)->minutes();
+            $this->post("{$url}/valor-do-ponto", ['cents_per_point' => $cents])->assertRedirect($url)->assertSessionHasNoErrors();
+        }
+
+        $this->get($url)->assertInertia(fn (Assert $page) => $page->has('rates', 4)
+            ->where('rates.0.cents_per_point', 25)->where('rates.0.recorded_at', '30/10/2026 15:04:00')
+            ->where('rates.3.cents_per_point', 10)->where('rates.3.recorded_at', '30/10/2026 15:01:00'));
+        $this->as($child)->get($url)->assertForbidden();
+        $this->post("{$url}/valor-do-ponto", ['cents_per_point' => 50])->assertForbidden();
+        $this->assertDatabaseCount('conversion_rates', 4);
+    }
+
     public function test_monthly_close_uses_original_local_cutoff_and_retries_without_duplicates(): void
     {
         [$guardian, $child, $task] = $this->family();

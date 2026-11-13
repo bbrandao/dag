@@ -25,11 +25,13 @@ final class AllowanceLedger
                 return;
             }
 
+            $now = $this->now($family)->utc();
             $id = $this->accounts->insertRate([
                 'family_id' => $family->id,
                 'guardian_id' => $guardian->id,
                 'cents_per_point' => $cents,
-                'effective_at' => $latest ? $this->now($family)->utc()->addSecond()->startOfSecond() : $family->created_at,
+                'effective_at' => $latest ? $now->addSecond()->startOfSecond() : $family->created_at,
+                'recorded_at' => $now,
             ]);
 
             if ($latest === null) {

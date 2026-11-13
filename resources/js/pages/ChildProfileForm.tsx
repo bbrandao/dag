@@ -8,10 +8,10 @@ export interface ChildProfile {
     phone: string;
 }
 
-type FormProps = { child: ChildProfile; onCreated?: never; onFailure?: never; onCancel?: never }
-    | { child?: never; onCreated: () => void; onFailure: () => void; onCancel: () => void };
+type FormProps = { child: ChildProfile; onSaved?: never; onFailure?: never; onCancel?: never }
+    | { child?: ChildProfile; onSaved: () => void; onFailure: () => void; onCancel: () => void };
 
-export default function ChildProfileForm({ child, onCreated, onFailure, onCancel }: FormProps) {
+export default function ChildProfileForm({ child, onSaved, onFailure, onCancel }: FormProps) {
     const form = useForm({
         name: child?.name ?? '',
         birth_date: child?.birth_date ?? '',
@@ -21,24 +21,18 @@ export default function ChildProfileForm({ child, onCreated, onFailure, onCancel
 
     function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (child) {
-            form.patch(`/guardian/children/${child.id}?from=children`);
-        } else {
-            const handleFailure = () => { onFailure(); return false as const; };
-            form.post('/guardian/children?from=children', {
-                preserveScroll: true,
-                onSuccess: onCreated,
-                onError: onFailure,
-                onHttpException: handleFailure,
-                onNetworkError: handleFailure,
-            });
-        }
+        if (form.processing) return;
+        const handleFailure = () => { onFailure?.(); return false as const; };
+        const options = { preserveScroll: true, onSuccess: onSaved, onError: onFailure,
+            onHttpException: onFailure ? handleFailure : undefined, onNetworkError: onFailure ? handleFailure : undefined };
+        if (child) form.patch(`/guardian/children/${child.id}?from=children${onCancel ? '&modal=1' : ''}`, options);
+        else form.post('/guardian/children?from=children', options);
     }
 
     return (
         <form onSubmit={save} aria-busy={form.processing}>
             <label htmlFor="child-name">Nome</label>
-            <input id="child-name" autoFocus={!child} required maxLength={120} value={form.data.name}
+            <input id="child-name" autoFocus={Boolean(onCancel)} required maxLength={120} value={form.data.name}
                 aria-describedby="name-error" aria-invalid={Boolean(form.errors.name)}
                 onChange={event => form.setData('name', event.target.value)} />
             <p id="name-error" className="error" role="alert">{form.errors.name}</p>
@@ -65,9 +59,9 @@ export default function ChildProfileForm({ child, onCreated, onFailure, onCancel
                 </>
             )}
             <button type="submit" disabled={form.processing}>{child ? 'Salvar alterações' : 'Cadastrar perfil'}</button>
-            {child
-                ? <Link className="button secondary" href="/guardian/children">Cancelar</Link>
-                : <button type="button" className="secondary" disabled={form.processing} onClick={onCancel}>Cancelar</button>}
+            {onCancel
+                ? <button type="button" className="secondary" disabled={form.processing} onClick={onCancel}>Cancelar</button>
+                : <Link className="button secondary" href="/guardian/children">Cancelar</Link>}
         </form>
     );
 }

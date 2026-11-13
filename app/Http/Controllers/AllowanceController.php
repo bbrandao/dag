@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SavePointRateRequest;
 use App\Services\AllowanceLedger;
 use App\Services\AllowanceOverview;
 use Illuminate\Http\RedirectResponse;
@@ -20,13 +21,10 @@ final class AllowanceController
         return Inertia::render('Allowance', $this->overview->data($request->user(), $child));
     }
 
-    public function rate(Request $request, AllowanceLedger $ledger, string $child): RedirectResponse
+    public function rate(SavePointRateRequest $request, AllowanceLedger $ledger, string $child): RedirectResponse
     {
         $this->overview->linkedChild($request->user(), $child);
-        $data = $request->validate(['cents_per_point' => ['required', 'integer', 'between:1,100000']], [
-            'cents_per_point.between' => 'Informe de 1 a 100.000 centavos por ponto.',
-        ]);
-        $ledger->setRate($request->user(), (int) $data['cents_per_point']);
+        $ledger->setRate($request->user(), (int) $request->validated('cents_per_point'));
 
         return redirect()->route('allowance.guardian', $child);
     }

@@ -109,6 +109,13 @@ final class FamilyLoginTest extends TestCase
             ->where('children.1.age', 12)->where('children.1.birth_date', '2013-11-12')
             ->where('children.1.phone', self::CHILD_PHONE)->missing('children.1.phone_hash'));
 
+        $childId = User::where('phone_hash', Phone::fingerprint(self::CHILD_PHONE))->value('id');
+        $edit = "{$index}/{$childId}?from=children&modal=1";
+        $this->patch($edit, [...$data, 'phone' => '+5571999994444'])->assertRedirect($index)->assertSessionHasErrors('phone');
+        $this->patch($edit, [...$data, 'name' => 'Abel'])->assertRedirect($index)->assertSessionHasNoErrors();
+        $this->get($index)->assertInertia(fn (Assert $page) => $page->has('children', 2)
+            ->where('children.0.name', 'Abel')->where('children.0.phone', self::CHILD_PHONE));
+
         $other = User::create([
             'family_id' => $guardian->family_id, 'name' => 'Outro responsável', 'role' => User::GUARDIAN,
             'phone' => '+5571999995555', 'phone_hash' => Phone::fingerprint('+5571999995555'),
