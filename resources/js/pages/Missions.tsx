@@ -15,10 +15,10 @@ export default function Missions({ missions, frequency, today }: {
     const groups = [
         { title: 'Hoje', missions: open.filter(mission => mission.due_on === today) },
         { title: 'Próximas', missions: open.filter(mission => mission.due_on !== today) },
-        { title: 'Vencidas', missions: missions.filter(mission => mission.status === 'expired').reverse() },
+        { title: 'Vencidas', missions: missions.filter(mission => mission.status === 'expired') },
         { title: 'Em revisão', missions: missions.filter(mission => mission.status === 'in_review') },
-        { title: 'Concluídas', missions: missions.filter(mission => mission.status === 'approved').reverse() },
-        { title: 'Reprovadas', missions: missions.filter(mission => mission.status === 'rejected').reverse() },
+        { title: 'Concluídas', missions: missions.filter(mission => mission.status === 'approved') },
+        { title: 'Reprovadas', missions: missions.filter(mission => mission.status === 'rejected') },
     ];
 
     return (

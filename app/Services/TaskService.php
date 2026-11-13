@@ -24,15 +24,30 @@ final class TaskService
         $children = $data['children'];
         $tasks = $this->tasks->forGuardian($guardian, $children->pluck('id'))
             ->map(fn (TaskTemplate $task) => [
-                ...$task->only(['id', 'title', 'criteria', 'points', 'frequency', 'schedule', 'starts_on', 'photo_mode']),
-                'weekday_time' => substr($task->weekday_time, 0, 5),
-                'weekend_time' => substr($task->weekend_time, 0, 5),
+                ...$this->formTask($task),
                 'children' => $task->children->pluck('name'),
-                'child_ids' => $task->children->pluck('id'),
                 'can_manage' => $task->children->count() === $task->active_children_count,
             ]);
 
         return ['tasks' => $tasks, ...$data];
+    }
+
+    public function editData(User $guardian, string $id): array
+    {
+        $task = $this->editableTask($guardian, $id, lock: false);
+        $task->load(['children' => fn ($query) => $query->where('users.active', true)]);
+
+        return [...$this->formData($guardian), 'task' => $this->formTask($task)];
+    }
+
+    private function formTask(TaskTemplate $task): array
+    {
+        return [
+            ...$task->only(['id', 'title', 'criteria', 'points', 'frequency', 'schedule', 'starts_on', 'photo_mode']),
+            'weekday_time' => substr($task->weekday_time, 0, 5),
+            'weekend_time' => substr($task->weekend_time, 0, 5),
+            'child_ids' => $task->children->pluck('id'),
+        ];
     }
 
     public function formData(User $guardian): array
@@ -80,11 +95,11 @@ final class TaskService
         });
     }
 
-    private function editableTask(User $guardian, string $id): TaskTemplate
+    private function editableTask(User $guardian, string $id, bool $lock = true): TaskTemplate
     {
         abort_unless($guardian->role === User::GUARDIAN, 403);
 
-        $task = $this->tasks->lockForFamily($guardian, $id);
+        $task = $this->tasks->findForFamily($guardian, $id, $lock);
         $children = $this->families->activeChildIds($guardian);
         $assigned = $this->tasks->assignedActiveChildIds($task);
         abort_if($assigned->isEmpty() || $assigned->diff($children)->isNotEmpty(), 404);

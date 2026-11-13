@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\SaveTaskRequest;
 use App\Services\TaskService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -38,12 +39,25 @@ final class TaskController
     {
         $this->tasks->save($request->user(), $request->validated(), $task);
 
-        return redirect()->route('guardian.tasks');
+        return $request->query('from') === 'edit'
+            ? redirect()->route('guardian.tasks.edit', $task)
+            : redirect()->route('guardian.tasks');
     }
 
-    public function destroy(Request $request, string $task): RedirectResponse
+    public function edit(Request $request, string $task): Response
+    {
+        Inertia::encryptHistory();
+
+        return Inertia::render('NewTask', $this->tasks->editData($request->user(), $task));
+    }
+
+    public function destroy(Request $request, string $task): RedirectResponse|JsonResponse
     {
         $this->tasks->delete($request->user(), $task);
+
+        if ($request->expectsJson()) {
+            return response()->json(['deleted' => true]);
+        }
 
         return redirect()->route('guardian.tasks');
     }

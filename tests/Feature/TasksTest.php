@@ -43,8 +43,8 @@ final class TasksTest extends TestCase
 
         $this->travelTo(Carbon::parse('2026-11-14 13:00:00', 'UTC'));
         $this->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
-            ->has('missions', 2)->where('missions.0.status', 'expired')
-            ->where('missions.1.due_at', '2026-11-14T12:00:00-03:00')->where('missions.1.status', 'pending'));
+            ->has('missions', 2)->where('missions.1.status', 'expired')
+            ->where('missions.0.due_at', '2026-11-14T12:00:00-03:00')->where('missions.0.status', 'pending'));
         $this->get('/app')->assertInertia(fn (Assert $page) => $page
             ->has('childMissions.missions', 2)->where('childMissions.missions.0.status', 'pending')
             ->where('childMissions.missions.1.status', 'expired'));
@@ -64,8 +64,8 @@ final class TasksTest extends TestCase
 
         $this->as($child)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
             ->has('missions', 2)
-            ->where('missions.0.title', 'Arrumar a cama')
-            ->where('missions.1.due_on', '2026-11-15'));
+            ->where('missions.0.due_on', '2026-11-15')
+            ->where('missions.1.title', 'Arrumar a cama'));
 
         $this->get('/app/missoes?frequency=weekly')->assertInertia(fn (Assert $page) => $page
             ->has('missions', 1)->where('missions.0.title', 'Semanal'));
@@ -74,7 +74,8 @@ final class TasksTest extends TestCase
         $this->get('/app')->assertInertia(fn (Assert $page) => $page
             ->has('childMissions.missions', 2)->where('progress.0.open', 2));
         $this->travelTo(Carbon::parse('2026-11-30 13:00:00', 'UTC'));
-        $this->get('/app/missoes')->assertInertia(fn (Assert $page) => $page->where('missions.3.title', 'Mensal'));
+        $this->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
+            ->where('missions', fn ($missions) => collect($missions)->last()['title'] === 'Mensal'));
     }
 
     public function test_dashboard_shows_a_same_day_mission_registered_after_its_deadline(): void
@@ -120,6 +121,7 @@ final class TasksTest extends TestCase
         $task = DB::table('task_templates')->value('id');
         $this->get('/app/missoes')->assertForbidden();
         $this->as($otherGuardian)->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page->has('tasks', 0));
+        $this->get("/guardian/tasks/{$task}/editar")->assertNotFound();
         $this->patch("/guardian/tasks/{$task}", $this->task($otherChild))->assertNotFound();
         $this->delete("/guardian/tasks/{$task}")->assertNotFound();
         $this->as($otherChild)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page->has('missions', 0));
@@ -135,20 +137,23 @@ final class TasksTest extends TestCase
         $task = DB::table('task_templates')->value('id');
         $this->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page
             ->where('tasks.0.can_manage', true)->where('tasks.0.child_ids.0', $child->id));
-        $this->patch("/guardian/tasks/{$task}", $this->task($child, [
+        $edit = "/guardian/tasks/{$task}/editar";
+        $this->get($edit)->assertInertia(fn (Assert $page) => $page->component('NewTask')
+            ->where('task.id', $task)->where('task.schedule.day', 3)->where('task.child_ids.0', $child->id));
+        $this->patch("/guardian/tasks/{$task}?from=edit", $this->task($child, [
             'title' => 'Organizar a cama',
             'points' => 15,
             'daily_days' => [1, 3, 4, 5],
-        ]))->assertSessionHasNoErrors()->assertRedirect('/guardian/tasks');
+        ]))->assertSessionHasNoErrors()->assertRedirect($edit);
 
         $this->as($child)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
             ->has('missions', 1)->where('missions.0.title', 'Arrumar a cama')->where('missions.0.points', 10));
         $this->travelTo(Carbon::parse('2026-11-12 13:00:00', 'UTC'));
         $this->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
-            ->has('missions', 2)->where('missions.0.status', 'expired')
-            ->where('missions.1.title', 'Organizar a cama')->where('missions.1.points', 15));
+            ->has('missions', 2)->where('missions.1.status', 'expired')
+            ->where('missions.0.title', 'Organizar a cama')->where('missions.0.points', 15));
 
-        $this->as($guardian)->delete("/guardian/tasks/{$task}")->assertRedirect('/guardian/tasks');
+        $this->as($guardian)->deleteJson("/guardian/tasks/{$task}")->assertExactJson(['deleted' => true]);
         $this->assertSoftDeleted('task_templates', ['id' => $task]);
         $this->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page->has('tasks', 0));
         $this->as($child)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page->has('missions', 2));
@@ -156,6 +161,35 @@ final class TasksTest extends TestCase
         $this->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
             ->has('missions', 2)->where('missions.1.status', 'expired'));
         $this->assertDatabaseCount('task_occurrences', 2);
+    }
+
+    public function test_lists_sort_by_local_deadline_points_frequency_and_creation_time(): void
+    {
+        [$guardian, $child] = $this->family();
+        $this->as($guardian);
+        foreach ([
+            ['title' => 'Zeta', 'points' => 20],
+            ['title' => 'Alfa', 'points' => 20],
+            ['title' => 'Semanal', 'points' => 20, 'frequency' => 'weekly', 'weekly_day' => 1],
+            ['title' => 'Mais pontos', 'points' => 25, 'frequency' => 'weekly', 'weekly_day' => 1],
+            ['title' => 'Mais cedo na semana', 'weekday_time' => '17:00', 'weekend_time' => '13:00'],
+            ['title' => 'Mais cedo no sábado', 'weekday_time' => '19:00', 'weekend_time' => '11:00'],
+        ] as $attributes) {
+            $this->post('/guardian/tasks', $this->task($child, $attributes))->assertSessionHasNoErrors();
+            $this->travel(1)->seconds();
+        }
+
+        $ordered = ['Mais cedo na semana', 'Mais pontos', 'Zeta', 'Alfa', 'Semanal', 'Mais cedo no sábado'];
+        $this->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page
+            ->where('tasks', fn ($tasks) => collect($tasks)->pluck('title')->all() === $ordered));
+        $this->get('/guardian/revisoes?date=2026-11-09')->assertInertia(fn (Assert $page) => $page
+            ->where('missions', fn ($missions) => collect($missions)->pluck('title')->all() === $ordered));
+        $this->as($child)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
+            ->where('missions', fn ($missions) => collect($missions)->pluck('title')->all() === $ordered));
+
+        $this->travelTo(Carbon::parse('2026-11-14 13:00:00', 'UTC'));
+        $this->as($guardian)->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page
+            ->where('tasks.0.title', 'Mais cedo no sábado')->where('tasks.5.title', 'Mais cedo na semana'));
     }
 
     private function as(User $user): static

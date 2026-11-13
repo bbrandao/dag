@@ -20,24 +20,20 @@ final class MissionRepository
 
     public function reviewQueue(User $guardian, ?string $day = null, ?DateTimeInterface $start = null, ?DateTimeInterface $end = null): Collection
     {
-        return $this->accessible($guardian)
+        $query = $this->accessible($guardian)
             ->join('users as children', 'children.id', '=', 'task_occurrences.child_id')
-            ->leftJoin('mission_submissions as pending_attempt', fn ($join) => $join
-                ->on('pending_attempt.occurrence_id', '=', 'task_occurrences.id')->whereNull('pending_attempt.reviewed_at'))
             ->where('children.active', true)
             ->when($day !== null, fn (Builder $query) => $query
                 ->where(fn (Builder $date) => $date->where('due_on', $day)->orWhere(fn (Builder $due) => $due
                     ->where('due_at', '>=', $start)->where('due_at', '<', $end))),
                 fn (Builder $query) => $query
                     ->where(fn (Builder $queue) => $queue->where('status', 'in_review')->orWhere(fn (Builder $expired) => $expired
-                        ->whereIn('status', ['pending', 'adjustment'])->where('due_at', '<=', now())))
-                    ->orderByRaw("CASE WHEN status = 'in_review' THEN 0 ELSE 1 END")
-                    ->orderBy('pending_attempt.submitted_at'))
-            ->orderBy('due_at')->orderBy('task_occurrences.id')
-            ->select('task_occurrences.id', 'title', 'status', 'due_at', 'children.name as child_name')
+                        ->whereIn('status', ['pending', 'adjustment'])->where('due_at', '<=', now()))))
+            ->select('task_occurrences.id', 'task_occurrences.title', 'status', 'due_at', 'children.name as child_name')
             ->addSelect(['last_submitted_at' => DB::table('mission_submissions')
-                ->whereColumn('occurrence_id', 'task_occurrences.id')->latest('submitted_at')->limit(1)->select('submitted_at')])
-            ->get();
+                ->whereColumn('occurrence_id', 'task_occurrences.id')->latest('submitted_at')->limit(1)->select('submitted_at')]);
+
+        return TaskOrder::occurrences($query, now($guardian->family->timezone))->get();
     }
 
     public function attempts(string $mission): Collection

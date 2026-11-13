@@ -15,16 +15,17 @@ final class TaskRepository
     {
         $linked = fn ($query) => $query->whereIn('users.id', $childIds);
 
-        return TaskTemplate::where('family_id', $guardian->family_id)->whereHas('children', $linked)
+        $query = TaskTemplate::where('family_id', $guardian->family_id)->whereHas('children', $linked)
             ->withCount(['children as active_children_count' => fn ($query) => $query->where('users.active', true)])
-            ->with(['children' => fn ($query) => $linked($query)->select('users.id', 'users.name')])
-            ->orderBy('title')->get();
+            ->with(['children' => fn ($query) => $linked($query)->select('users.id', 'users.name')]);
+
+        return TaskOrder::templates($query, now($guardian->family->timezone))->get();
     }
 
-    public function lockForFamily(User $guardian, string $id): TaskTemplate
+    public function findForFamily(User $guardian, string $id, bool $lock = false): TaskTemplate
     {
         return TaskTemplate::where('family_id', $guardian->family_id)->whereKey($id)
-            ->lockForUpdate()->firstOrFail();
+            ->when($lock, fn ($query) => $query->lockForUpdate())->firstOrFail();
     }
 
     public function assignedActiveChildIds(TaskTemplate $task): Collection
@@ -76,9 +77,9 @@ final class TaskRepository
     public function childMissions(User $child, ?string $frequency, DateTimeInterface $now, ?string $today = null): Collection
     {
         return $this->openedMissions($child, $now)
-            ->when($frequency, fn ($query) => $query->where('frequency', $frequency))
+            ->when($frequency, fn ($query) => $query->where('task_occurrences.frequency', $frequency))
             ->when($frequency === null && $today !== null, fn (Builder $query) => $this->hideEarlyMonthly($query, $today))
-            ->orderBy('due_at')->orderBy('id')->get();
+            ->get();
     }
 
     public function dashboardMissions(User $child, DateTimeInterface $now, string $today): Collection
@@ -86,24 +87,27 @@ final class TaskRepository
         $missions = $this->openedMissions($child, $now);
         $this->hideEarlyMonthly($missions, $today);
         $actionable = (clone $missions)->whereIn('status', ['pending', 'adjustment']);
-        $open = (clone $actionable)->where('due_at', '>', $now)->orderBy('due_at')->orderBy('id')->limit(5)->get();
-        $expired = $actionable->where('due_at', '<=', $now)->orderByDesc('due_at')->orderBy('id')->limit(5)->get();
+        $open = (clone $actionable)->where('due_at', '>', $now)->limit(5)->get();
+        $expired = $actionable->where('due_at', '<=', $now)->limit(5)->get();
         $reviewed = $missions->whereIn('status', ['in_review', 'approved', 'rejected'])
-            ->orderByDesc('due_at')->orderBy('id')->limit(5)->get();
+            ->limit(5)->get();
 
         return $open->concat($expired)->concat($reviewed);
     }
 
     private function hideEarlyMonthly(Builder $missions, string $today): Builder
     {
-        return $missions->where(fn (Builder $visible) => $visible->where('frequency', '!=', 'monthly')
+        return $missions->where(fn (Builder $visible) => $visible->where('task_occurrences.frequency', '!=', 'monthly')
             ->orWhere('due_on', '<=', $today)->orWhere('status', '!=', 'pending'));
     }
 
     private function openedMissions(User $child, DateTimeInterface $now): Builder
     {
-        return DB::table('task_occurrences')->where('family_id', $child->family_id)->where('child_id', $child->id)
-            ->where('opens_at', '<=', $now)->select(['id', 'title', 'criteria', 'points', 'frequency', 'due_at', 'status']);
+        $query = DB::table('task_occurrences')->where('task_occurrences.family_id', $child->family_id)->where('child_id', $child->id)
+            ->where('opens_at', '<=', $now)->select(['task_occurrences.id', 'task_occurrences.title', 'task_occurrences.criteria',
+                'task_occurrences.points', 'task_occurrences.frequency', 'due_at', 'status']);
+
+        return TaskOrder::occurrences($query, now($child->family->timezone));
     }
 
     private function activeChildren(?string $childId): callable

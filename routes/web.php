@@ -31,6 +31,7 @@ Route::middleware(['auth', 'active.account'])->group(function (): void {
     Route::patch('/guardian/children/{child}', [ChildController::class, 'update'])->whereUuid('child');
     Route::get('/guardian/tasks', [TaskController::class, 'index'])->name('guardian.tasks');
     Route::get('/guardian/tasks/nova', [TaskController::class, 'create'])->name('guardian.tasks.create');
+    Route::get('/guardian/tasks/{task}/editar', [TaskController::class, 'edit'])->whereUuid('task')->name('guardian.tasks.edit');
     Route::post('/guardian/tasks', [TaskController::class, 'store']);
     Route::patch('/guardian/tasks/{task}', [TaskController::class, 'update'])->whereUuid('task');
     Route::delete('/guardian/tasks/{task}', [TaskController::class, 'destroy'])->whereUuid('task');

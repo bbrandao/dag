@@ -3,7 +3,7 @@ import { LoaderCircle } from 'lucide-react';
 import { type FormEvent } from 'react';
 import { type Frequency, frequencies, months, weekDays } from '../tasks';
 
-export interface Task {
+export interface EditableTask {
     id: string;
     title: string;
     criteria: string;
@@ -14,21 +14,20 @@ export interface Task {
     weekday_time: string;
     weekend_time: string;
     photo_mode: string;
-    children: string[];
     child_ids: string[];
-    can_manage: boolean;
 }
+
+export type Task = EditableTask & { children: string[]; can_manage: boolean };
 
 export interface TaskFormData {
     children: { id: string; name: string }[];
     today: string;
 }
 
-export default function TaskForm({ children, today, task, onSaved, onFailure, onCancel, onBusyChange }: TaskFormData & {
-    task?: Task;
+export default function TaskForm({ children, today, task, onSaved, onFailure, onBusyChange }: TaskFormData & {
+    task?: EditableTask;
     onSaved: () => void;
     onFailure: () => void;
-    onCancel?: () => void;
     onBusyChange?: (busy: boolean) => void;
 }) {
     const initial = {
@@ -77,7 +76,7 @@ export default function TaskForm({ children, today, task, onSaved, onFailure, on
             onHttpException: handleFailure,
             onNetworkError: handleFailure,
         };
-        if (task) form.patch(`/guardian/tasks/${task.id}`, options);
+        if (task) form.patch(`/guardian/tasks/${task.id}?from=edit`, options);
         else form.post('/guardian/tasks?from=new', options);
     }
 
@@ -184,7 +183,6 @@ export default function TaskForm({ children, today, task, onSaved, onFailure, on
                     {form.processing && <LoaderCircle size={17} className="motion-safe:animate-spin" aria-hidden="true" />}
                     {form.processing ? 'Salvando…' : task ? 'Salvar alterações' : 'Cadastrar tarefa'}
                 </button>
-                {onCancel && <button className="secondary" type="button" onClick={onCancel}>Cancelar edição</button>}
             </fieldset>
         </form>
     );
