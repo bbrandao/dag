@@ -11,6 +11,7 @@ final class TaskOrder
     public static function templates(ModelBuilder $query, DateTimeInterface $localToday): ModelBuilder
     {
         $deadline = (int) $localToday->format('N') >= 6 ? 'weekend_time' : 'weekday_time';
+        self::byFrequency($query->getQuery(), 'task_templates');
         $query->orderBy($deadline);
         self::tieBreakers($query->getQuery(), 'task_templates');
 
@@ -20,6 +21,7 @@ final class TaskOrder
     public static function occurrences(Builder $query, DateTimeInterface $localToday): Builder
     {
         $query->join('task_templates', 'task_templates.id', '=', 'task_occurrences.task_id');
+        self::byFrequency($query, 'task_occurrences');
         if ($query->getConnection()->getDriverName() === 'sqlite') {
             $query->orderByRaw('time(task_occurrences.due_at, ?)', [$localToday->format('P')]);
         } else {
@@ -31,10 +33,14 @@ final class TaskOrder
         return $query->orderBy('task_occurrences.due_at')->orderBy('task_occurrences.id');
     }
 
+    private static function byFrequency(Builder $query, string $source): void
+    {
+        $query->orderByRaw("CASE {$source}.frequency WHEN 'daily' THEN 1 WHEN 'weekly' THEN 2 WHEN 'monthly' THEN 3 WHEN 'yearly' THEN 4 ELSE 5 END");
+    }
+
     private static function tieBreakers(Builder $query, string $source): void
     {
         $query->orderByDesc("{$source}.points")
-            ->orderByRaw("CASE {$source}.frequency WHEN 'daily' THEN 1 WHEN 'weekly' THEN 2 WHEN 'monthly' THEN 3 ELSE 4 END")
             ->orderBy('task_templates.created_at')->orderBy('task_templates.id');
     }
 }

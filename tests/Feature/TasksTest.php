@@ -51,7 +51,7 @@ final class TasksTest extends TestCase
         $this->assertDatabaseCount('task_occurrences', 2);
     }
 
-    public function test_missions_sort_by_deadline_and_filter_by_frequency(): void
+    public function test_missions_sort_by_frequency_before_deadline_and_filter_by_frequency(): void
     {
         [$guardian, $child] = $this->family();
         $this->as($guardian)->post('/guardian/tasks', $this->task($child, [
@@ -64,8 +64,8 @@ final class TasksTest extends TestCase
 
         $this->as($child)->get('/app/missoes')->assertInertia(fn (Assert $page) => $page
             ->has('missions', 2)
-            ->where('missions.0.due_on', '2026-11-15')
-            ->where('missions.1.title', 'Arrumar a cama'));
+            ->where('missions.0.title', 'Arrumar a cama')
+            ->where('missions.1.due_on', '2026-11-15'));
 
         $this->get('/app/missoes?frequency=weekly')->assertInertia(fn (Assert $page) => $page
             ->has('missions', 1)->where('missions.0.title', 'Semanal'));
@@ -163,7 +163,7 @@ final class TasksTest extends TestCase
         $this->assertDatabaseCount('task_occurrences', 2);
     }
 
-    public function test_lists_sort_by_local_deadline_points_frequency_and_creation_time(): void
+    public function test_lists_sort_by_frequency_local_deadline_points_and_creation_time(): void
     {
         [$guardian, $child] = $this->family();
         $this->as($guardian);
@@ -171,7 +171,8 @@ final class TasksTest extends TestCase
             ['title' => 'Zeta', 'points' => 20],
             ['title' => 'Alfa', 'points' => 20],
             ['title' => 'Semanal', 'points' => 20, 'frequency' => 'weekly', 'weekly_day' => 1],
-            ['title' => 'Mais pontos', 'points' => 25, 'frequency' => 'weekly', 'weekly_day' => 1],
+            ['title' => 'Mais pontos', 'points' => 25],
+            ['title' => 'Semanal mais cedo', 'points' => 50, 'frequency' => 'weekly', 'weekly_day' => 1, 'weekday_time' => '16:00'],
             ['title' => 'Mais cedo na semana', 'weekday_time' => '17:00', 'weekend_time' => '13:00'],
             ['title' => 'Mais cedo no sábado', 'weekday_time' => '19:00', 'weekend_time' => '11:00'],
         ] as $attributes) {
@@ -179,7 +180,7 @@ final class TasksTest extends TestCase
             $this->travel(1)->seconds();
         }
 
-        $ordered = ['Mais cedo na semana', 'Mais pontos', 'Zeta', 'Alfa', 'Semanal', 'Mais cedo no sábado'];
+        $ordered = ['Mais cedo na semana', 'Mais pontos', 'Zeta', 'Alfa', 'Mais cedo no sábado', 'Semanal mais cedo', 'Semanal'];
         $this->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page
             ->where('tasks', fn ($tasks) => collect($tasks)->pluck('title')->all() === $ordered));
         $this->get('/guardian/revisoes?date=2026-11-09')->assertInertia(fn (Assert $page) => $page
@@ -189,7 +190,8 @@ final class TasksTest extends TestCase
 
         $this->travelTo(Carbon::parse('2026-11-14 13:00:00', 'UTC'));
         $this->as($guardian)->get('/guardian/tasks')->assertInertia(fn (Assert $page) => $page
-            ->where('tasks.0.title', 'Mais cedo no sábado')->where('tasks.5.title', 'Mais cedo na semana'));
+            ->where('tasks.0.title', 'Mais cedo no sábado')->where('tasks.4.title', 'Mais cedo na semana')
+            ->where('tasks.5.title', 'Semanal mais cedo'));
     }
 
     private function as(User $user): static

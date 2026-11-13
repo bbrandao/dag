@@ -125,7 +125,7 @@ export default function Tasks({ tasks, children }: Pick<TaskFormData, 'children'
                     <div className="mt-4 border-0 border-t border-solid border-dag-line pt-4">
                         <p className="criteria">{task.criteria}</p>
                         <p><strong>Periodicidade:</strong> {scheduleLabel(task)}</p>
-                        <div className="mb-4 grid grid-cols-[1fr_1fr_auto] items-start gap-2 text-xs sm:text-sm">
+                        <div className="mb-4 grid grid-cols-3 items-start gap-1 text-center text-xs sm:gap-2 sm:text-sm">
                             {[
                                 { days: 'Seg a Sex', time: task.weekday_time },
                                 { days: 'Sáb e Dom', time: task.weekend_time },
@@ -137,9 +137,9 @@ export default function Tasks({ tasks, children }: Pick<TaskFormData, 'children'
                                     <Badge className="bg-dag-lilac px-2 py-1">{days}</Badge>
                                 </div>
                             ))}
-                            <div className="grid gap-1">
+                            <div className="grid justify-items-center gap-1">
                                 <span className="inline-flex min-h-5 items-center gap-1 tabular-nums">
-                                    <CalendarDays size={17} aria-hidden="true" />
+                                    <CalendarDays size={15} className="shrink-0" aria-hidden="true" />
                                     <span className="sr-only">Data de início</span>
                                     <time dateTime={task.starts_on}>{formatDate(task.starts_on)}</time>
                                 </span>
