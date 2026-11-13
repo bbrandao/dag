@@ -38,9 +38,7 @@ export default function Dashboard({ role, family, earnedPoints, monthLabel, prog
             <section className="card">
                 {!isGuardian && <p className="tag reward">{earnedPoints} pontos conquistados</p>}
                 <div className="filters">
-                    <Link className="button" href={isGuardian ? '/guardian/tasks' : '/app/missoes'}>
-                        {isGuardian ? 'Gerenciar tarefas' : 'Ver minhas missões'}
-                    </Link>
+                    {!isGuardian && <Link className="button" href="/app/missoes">Ver minhas missões</Link>}
                     {isGuardian && <Link className="button secondary" href="/guardian/revisoes">Revisar missões</Link>}
                     {!isGuardian && <Link className="button secondary" href="/app/ganhos">Ver meus ganhos</Link>}
                 </div>

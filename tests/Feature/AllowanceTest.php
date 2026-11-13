@@ -90,6 +90,12 @@ final class AllowanceTest extends TestCase
         $this->get($url)->assertInertia(fn (Assert $page) => $page->has('rates', 4)
             ->where('rates.0.cents_per_point', 25)->where('rates.0.recorded_at', '30/10/2026 15:04:00')
             ->where('rates.3.cents_per_point', 10)->where('rates.3.recorded_at', '30/10/2026 15:01:00'));
+        $this->get($url, [
+            'X-Inertia' => 'true',
+            'X-Inertia-Version' => app(\App\Http\Middleware\HandleInertiaRequests::class)->version(request()),
+            'X-Inertia-Partial-Component' => 'Settings',
+            'X-Inertia-Partial-Data' => 'rates,errors',
+        ])->assertOk()->assertJsonPath('props.rates.0.cents_per_point', 25)->assertJsonMissingPath('props.viewer');
         $this->as($child)->get($url)->assertForbidden();
         $this->post("{$url}/valor-do-ponto", ['cents_per_point' => 50])->assertForbidden();
         $this->assertDatabaseCount('conversion_rates', 4);
