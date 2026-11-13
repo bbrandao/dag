@@ -62,7 +62,7 @@ final class AllowanceTest extends TestCase
         $this->assertSame($paidAt, DB::table('payouts')->value('paid_at'));
         $this->get('/app')->assertInertia(fn (Assert $page) => $page->component('Dashboard')
             ->where('rateCents', 20)->has('progress', 1)->where('progress.0.id', $child->id)
-            ->where('progress.0.availablePoints', 10)->where('progress.0.approved', 1)
+            ->where('progress.0.availablePoints', 10)->where('progress.0.availableCents', 200)->where('progress.0.approved', 1)
             ->where('progress.0.monthCents', 200)->where('progress.0.paidThisMonth', 200));
         $this->as($child)->get('/app/ganhos')->assertInertia(fn (Assert $page) => $page->component('Allowance')
             ->where('availablePoints', 10)->where('availableCents', 200)->where('paidCents', 200)

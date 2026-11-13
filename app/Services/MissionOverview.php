@@ -16,7 +16,7 @@ final class MissionOverview
         private readonly TaskCalendar $calendar,
     ) {}
 
-    public function reviews(User $guardian, ?string $date = null): array
+    public function reviews(User $guardian, ?string $date = null, ?string $child = null, ?string $status = null): array
     {
         abort_unless($guardian->role === User::GUARDIAN, 403);
 
@@ -25,10 +25,10 @@ final class MissionOverview
             $this->calendar->materialize($guardian->family);
         }
         $day = $date === null ? null : CarbonImmutable::parse($date, $guardian->family->timezone)->startOfDay();
-        $missions = $this->missions->reviewQueue($guardian, $date, $day?->utc(), $day?->addDay()->utc())
+        $missions = $this->missions->reviewQueue($guardian, $date, $day?->utc(), $day?->addDay()->utc(), $child, $status)
             ->map(fn (object $mission) => $this->display($mission, $guardian));
 
-        return ['missions' => $missions, 'date' => $date, 'today' => $today];
+        return ['missions' => $missions, 'date' => $date, 'today' => $today, 'child' => $child, 'status' => $status];
     }
 
     public function details(User $user, string $mission, string $routeRole): array

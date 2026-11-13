@@ -201,8 +201,8 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
     );
 }
 
-function GuardianActions({ mission, attempt, creditSettled, reviewDate }: {
-    mission: MissionDetails; attempt: Attempt | undefined; creditSettled: boolean; reviewDate: string | null;
+function GuardianActions({ mission, attempt, creditSettled, reviewQuery }: {
+    mission: MissionDetails; attempt: Attempt | undefined; creditSettled: boolean; reviewQuery: string;
 }) {
     const review = useForm({
         submission_id: attempt?.id ?? '', review_version: attempt?.review_version ?? 0,
@@ -210,7 +210,7 @@ function GuardianActions({ mission, attempt, creditSettled, reviewDate }: {
     });
     const reopen = useForm({ new_due_at: '', reason: '' });
     const url = `/guardian/revisoes/${mission.id}`;
-    const query = reviewDate ? `?date=${reviewDate}` : '';
+    const query = reviewQuery ? `?${reviewQuery}` : '';
 
     return (
         <>
@@ -251,9 +251,9 @@ function GuardianActions({ mission, attempt, creditSettled, reviewDate }: {
     );
 }
 
-export default function Mission({ mission, attempts, reopening, requestId, isGuardian, creditSettled, reviewDate }: {
+export default function Mission({ mission, attempts, reopening, requestId, isGuardian, creditSettled, reviewQuery }: {
     mission: MissionDetails; attempts: Attempt[]; reopening: string | null; requestId: string; isGuardian: boolean;
-    creditSettled: boolean; reviewDate: string | null;
+    creditSettled: boolean; reviewQuery: string;
 }) {
     return (
         <main className="screen">
@@ -261,7 +261,7 @@ export default function Mission({ mission, attempts, reopening, requestId, isGua
             <header className="topbar">
                 <h1>{mission.title}</h1>
                 <Link className="button secondary" href={isGuardian
-                    ? `/guardian/revisoes${reviewDate ? `?date=${reviewDate}` : ''}` : '/app/missoes'}>Voltar</Link>
+                    ? `/guardian/revisoes${reviewQuery ? `?${reviewQuery}` : ''}` : '/app/missoes'}>Voltar</Link>
             </header>
             <section className={`card mission-card status-${mission.status}`}>
                 <div className="mission-card-labels"><MissionStatusBadge status={mission.status} /></div>
@@ -282,7 +282,7 @@ export default function Mission({ mission, attempts, reopening, requestId, isGua
                 ))}
             </section>}
             {isGuardian
-                ? <GuardianActions mission={mission} attempt={attempts[0]} creditSettled={creditSettled} reviewDate={reviewDate}
+                ? <GuardianActions mission={mission} attempt={attempts[0]} creditSettled={creditSettled} reviewQuery={reviewQuery}
                     key={attempts[0] ? `${attempts[0].id}:${attempts[0].review_version}` : mission.id} />
                 : (mission.status === 'pending' || mission.status === 'adjustment') &&
                     <SubmissionForm mission={mission} requestId={requestId} key={attempts[0]?.id ?? mission.id} />}

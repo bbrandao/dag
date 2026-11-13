@@ -20,9 +20,11 @@ final class MissionController
     {
         Inertia::encryptHistory();
 
-        $data = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
+        $data = $this->reviewFilters($request);
 
-        return Inertia::render('Reviews', $this->overview->reviews($request->user(), $data['date'] ?? null));
+        return Inertia::render('Reviews', $this->overview->reviews(
+            $request->user(), $data['date'] ?? null, $data['child'] ?? null, $data['status'] ?? null,
+        ));
     }
 
     public function show(Request $request, string $mission): Response
@@ -32,7 +34,7 @@ final class MissionController
 
         return Inertia::render('Mission', [
             ...$this->overview->details($request->user(), $mission, $role),
-            'reviewDate' => $role === User::GUARDIAN ? $this->reviewDate($request) : null,
+            'reviewQuery' => $role === User::GUARDIAN ? http_build_query($this->reviewFilters($request)) : '',
         ]);
     }
 
@@ -53,6 +55,7 @@ final class MissionController
     public function review(Request $request, string $mission): RedirectResponse
     {
         abort_unless($request->user()->role === User::GUARDIAN, 403);
+        $filters = $this->reviewFilters($request);
         $data = $request->validate([
             'submission_id' => ['required', 'uuid'],
             'review_version' => ['nullable', 'integer', 'min:0'],
@@ -62,19 +65,20 @@ final class MissionController
 
         $this->missions->review($request->user(), $mission, $data);
 
-        return redirect()->route('reviews.show', ['mission' => $mission, 'date' => $this->reviewDate($request)]);
+        return redirect()->route('reviews.show', ['mission' => $mission, ...$filters]);
     }
 
     public function reopen(Request $request, string $mission): RedirectResponse
     {
         abort_unless($request->user()->role === User::GUARDIAN, 403);
+        $filters = $this->reviewFilters($request);
         $data = $request->validate([
             'new_due_at' => ['required', 'date_format:Y-m-d\TH:i'],
             'reason' => ['required', 'string', 'max:255'],
         ]);
         $this->missions->reopen($request->user(), $mission, $data);
 
-        return redirect()->route('reviews.show', ['mission' => $mission, 'date' => $this->reviewDate($request)]);
+        return redirect()->route('reviews.show', ['mission' => $mission, ...$filters]);
     }
 
     public function photo(Request $request, string $mission, string $submission): StreamedResponse
@@ -86,10 +90,12 @@ final class MissionController
         return $disk->response($path, 'missao.jpg', ['Content-Type' => 'image/jpeg', 'Cache-Control' => 'private, no-store']);
     }
 
-    private function reviewDate(Request $request): ?string
+    private function reviewFilters(Request $request): array
     {
-        $date = $request->query('date');
-
-        return is_string($date) && preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date) ? $date : null;
+        return validator($request->query(), [
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'child' => ['nullable', 'uuid'],
+            'status' => ['nullable', 'in:in_review'],
+        ])->validate();
     }
 }

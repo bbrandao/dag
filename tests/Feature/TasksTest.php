@@ -87,6 +87,9 @@ final class TasksTest extends TestCase
         $this->post('/guardian/tasks', $this->task($child, [
             'title' => 'Prazo anterior ao início', 'frequency' => 'monthly', 'month_day' => 5,
         ]))->assertRedirect('/guardian/tasks');
+        $this->get('/app')->assertInertia(fn (Assert $page) => $page
+            ->where('progress.0.periods.day.expired', 1)->where('progress.0.periods.day.possible', 10)
+            ->where('progress.0.periods.week.expired', 1)->where('progress.0.periods.month.expired', 1));
 
         $this->as($child)->get('/app')->assertInertia(fn (Assert $page) => $page
             ->has('childMissions.missions', 1)->where('progress.0.expired', 1)

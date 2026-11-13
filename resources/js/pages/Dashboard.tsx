@@ -1,5 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 import { Badge } from '../components/ui/badge';
+import { ChildProgressCard, type GuardianProgress } from '../ChildProgressCard';
 import { MissionCard, type MissionSummary } from '../MissionCard';
 
 import { money } from '../money';
@@ -17,6 +18,8 @@ interface Progress {
     monthAwaitingConversion: boolean;
     pendingCents: number;
     paidThisMonth: number;
+    availableCents: number;
+    periods: GuardianProgress['periods'] | null;
 }
 
 interface DashboardProps {
@@ -24,25 +27,25 @@ interface DashboardProps {
     family: string;
     earnedPoints: number;
     monthLabel: string;
+    today: string;
     progress: Progress[];
     childMissions: { missions: MissionSummary[]; today: string } | null;
 }
 
-export default function Dashboard({ role, family, earnedPoints, monthLabel, progress, childMissions }: DashboardProps) {
+export default function Dashboard({ role, family, earnedPoints, monthLabel, today, progress, childMissions }: DashboardProps) {
     const isGuardian = role === 'guardian';
 
     return (
         <main className="screen">
             <Head title={isGuardian ? 'Família' : 'Meu espaço'} />
             <h1><Badge className="bg-dag-lilac px-3 py-1.5 text-sm leading-snug wrap-anywhere">{family}</Badge></h1>
-            <section className="card">
-                {!isGuardian && <p className="tag reward">{earnedPoints} pontos conquistados</p>}
+            {!isGuardian && <section className="card">
+                <p className="tag reward">{earnedPoints} pontos conquistados</p>
                 <div className="filters">
-                    {!isGuardian && <Link className="button" href="/app/missoes">Ver minhas missões</Link>}
-                    {isGuardian && <Link className="button secondary" href="/guardian/revisoes">Revisar missões</Link>}
-                    {!isGuardian && <Link className="button secondary" href="/app/ganhos">Ver meus ganhos</Link>}
+                    <Link className="button" href="/app/missoes">Ver minhas missões</Link>
+                    <Link className="button secondary" href="/app/ganhos">Ver meus ganhos</Link>
                 </div>
-            </section>
+            </section>}
             {childMissions && [
                 { title: 'Missões a fazer', missions: childMissions.missions.filter(mission => mission.status === 'pending' || mission.status === 'adjustment') },
                 { title: 'Em revisão', missions: childMissions.missions.filter(mission => mission.status === 'in_review') },
@@ -56,15 +59,16 @@ export default function Dashboard({ role, family, earnedPoints, monthLabel, prog
                 </section>
             ))}
             <section aria-labelledby="progress-title">
-                <h2 id="progress-title">{isGuardian ? 'Acompanhamento dos filhos' : 'Meu acompanhamento'}</h2>
-                <p>Resumo de {monthLabel}</p>
+                <h2 id="progress-title">{isGuardian ? 'Acompanhamento dos Filhos' : 'Meu acompanhamento'}</h2>
+                {!isGuardian && <p>Resumo de {monthLabel}</p>}
                 {progress.length === 0 && <p className="card">Cadastre um perfil infantil para acompanhar as missões e configurar a mesada.</p>}
                 {progress.map(item => {
-                    const allowance = isGuardian ? `/guardian/mesadas/${item.id}` : '/app/ganhos';
+                    if (isGuardian) {
+                        return item.periods && <ChildProgressCard key={item.id} child={{ ...item, periods: item.periods }} today={today} />;
+                    }
 
                     return (
                         <article className="card" key={item.id}>
-                            {isGuardian && <h3>{item.name}</h3>}
                             <dl className="dashboard-metrics">
                                 <div><dt>Missões a fazer agora</dt><dd>{item.open}</dd></div>
                                 <div><dt>Em revisão agora</dt><dd>{item.inReview}</dd></div>
@@ -77,8 +81,7 @@ export default function Dashboard({ role, family, earnedPoints, monthLabel, prog
                             </dl>
                             {item.awaitingConversion && <p>Há pontos disponíveis aguardando a primeira taxa de conversão.</p>}
                             <div className="filters">
-                                {isGuardian && <a className="button" href={`${allowance}#fechamento`}>Encerrar ciclo de mesada</a>}
-                                <a className="button secondary" href={`${allowance}#evolucao`}>Ver evolução e extrato</a>
+                                <a className="button secondary" href="/app/ganhos#evolucao">Ver evolução e extrato</a>
                             </div>
                         </article>
                     );

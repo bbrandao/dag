@@ -89,6 +89,13 @@ final class MissionReviewTest extends TestCase
         $this->get($review)->assertNotFound();
         $this->as($guardian)->get('/guardian/revisoes')->assertInertia(fn (Assert $page) => $page
             ->component('Reviews')->where('missions.0.id', $mission));
+        $filters = "date=2026-11-09&child={$child->id}&status=in_review";
+        $this->get("/guardian/revisoes?{$filters}")->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.id', $mission)->where('child', $child->id));
+        $this->get('/guardian/revisoes?status=in_review&child='.$other->id)->assertInertia(fn (Assert $page) => $page->has('missions', 0));
+        $this->get("{$review}?{$filters}")->assertInertia(fn (Assert $page) => $page->where('reviewQuery', $filters));
+        $this->get('/app')->assertInertia(fn (Assert $page) => $page
+            ->where('progress.0.periods.day.inReview', 1)->where('progress.0.periods.day.possible', 10));
         $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 1]);
         $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page
             ->component('Inbox')->where('events.0.href', $review));
@@ -97,7 +104,12 @@ final class MissionReviewTest extends TestCase
         $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->has('events', 1)->where('events.0.unread', false));
 
         $decision = ['submission_id' => $attempt->id, 'decision' => 'approved', 'feedback' => 'Muito bem!'];
-        $this->post($review, $decision)->assertRedirect($review)->assertSessionHasNoErrors();
+        $this->post("{$review}?{$filters}", $decision)->assertRedirect("{$review}?{$filters}")->assertSessionHasNoErrors();
+        $this->get("/guardian/revisoes?{$filters}")->assertInertia(fn (Assert $page) => $page->has('missions', 0));
+        $this->get('/app')->assertInertia(fn (Assert $page) => $page
+            ->where('progress.0.periods.day.approved', 1)->where('progress.0.periods.day.earned', 10)
+            ->where('progress.0.periods.week.earned', 10)->where('progress.0.periods.month.earned', 10)
+            ->where('progress.0.availablePoints', 10)->where('progress.0.awaitingConversion', true));
         $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->has('events', 0));
         $this->post($review, $decision)->assertRedirect($review);
         $this->assertDatabaseCount('point_credits', 1);

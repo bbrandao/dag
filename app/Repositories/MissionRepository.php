@@ -18,14 +18,18 @@ final class MissionRepository
             ->when($lock, fn (Builder $query) => $query->lockForUpdate())->firstOrFail();
     }
 
-    public function reviewQueue(User $guardian, ?string $day = null, ?DateTimeInterface $start = null, ?DateTimeInterface $end = null): Collection
+    public function reviewQueue(User $guardian, ?string $day = null, ?DateTimeInterface $start = null, ?DateTimeInterface $end = null,
+        ?string $child = null, ?string $status = null): Collection
     {
         $query = $this->accessible($guardian)
             ->join('users as children', 'children.id', '=', 'task_occurrences.child_id')
             ->where('children.active', true)
+            ->when($child !== null, fn (Builder $query) => $query->where('task_occurrences.child_id', $child))
+            ->when($status !== null, fn (Builder $query) => $query->where('task_occurrences.status', $status))
             ->when($day !== null, fn (Builder $query) => $query
-                ->where(fn (Builder $date) => $date->where('due_on', $day)->orWhere(fn (Builder $due) => $due
-                    ->where('due_at', '>=', $start)->where('due_at', '<', $end))),
+                ->where(fn (Builder $date) => $date
+                    ->where(fn (Builder $due) => $due->where('due_at', '>=', $start)->where('due_at', '<', $end))
+                    ->when($status === null, fn (Builder $date) => $date->orWhere('due_on', $day))),
                 fn (Builder $query) => $query
                     ->where(fn (Builder $queue) => $queue->where('status', 'in_review')->orWhere(fn (Builder $expired) => $expired
                         ->whereIn('status', ['pending', 'adjustment'])->where('due_at', '<=', now()))))
