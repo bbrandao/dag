@@ -11,7 +11,16 @@ final class Uazapi
 {
     public function sendOtp(string $phone, #[\SensitiveParameter] string $code): void
     {
-        $this->sendText($phone, "DAG · Seu código de acesso é {$code}. Ele expira em 5 minutos. Não compartilhe.", 'OTP');
+        $message = "*DAG*\n\nSeu código de acesso é: *{$code}*\nEle expira em 5 minutos.\n\n🚫Não compartilhe!";
+        $result = $this->send($phone, '/send/menu', [
+            'type' => 'button',
+            'text' => $message,
+            'choices' => ["Copiar código|copy:{$code}"],
+        ], 'OTP', 5);
+
+        if ($result === 'unsupported') {
+            $this->sendText($phone, $message, 'OTP');
+        }
     }
 
     public function sendText(string $phone, #[\SensitiveParameter] string $message, string $purpose = 'avisos'): string

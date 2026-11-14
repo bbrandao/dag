@@ -28,6 +28,8 @@ final class FamilyLoginTest extends TestCase
         'status' => ['connected' => true, 'jid' => ['user' => '5571999990000']],
     ];
 
+    private int $menuStatus = 200;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -42,6 +44,7 @@ final class FamilyLoginTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([
             'https://gateway.example/instance/status' => fn () => Http::response($this->gatewayStatus),
+            'https://gateway.example/send/menu' => fn () => Http::response(['id' => 'test-menu'], $this->menuStatus),
             'https://gateway.example/send/text' => Http::response(['id' => 'test-message']),
         ]);
     }
@@ -53,6 +56,10 @@ final class FamilyLoginTest extends TestCase
         $this->getJson('/app/avisos/resumo')->assertUnauthorized();
         $this->post('/auth/otp', ['phone' => self::GUARDIAN_PHONE])->assertRedirect('/login');
         $code = $this->sentCode(self::GUARDIAN_PHONE);
+        Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/menu'
+            && $request['type'] === 'button' && $request['choices'] === ["Copiar código|copy:{$code}"]
+            && $request['text'] === "*DAG*\n\nSeu código de acesso é: *{$code}*\nEle expira em 5 minutos.\n\n🚫Não compartilhe!");
+        Http::assertNotSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text');
         $this->get('/login')->assertInertia(fn (Assert $page) => $page->where('awaitingCode', true)->where('viewer', null));
         $this->assertDatabaseMissing('otp_challenges', ['digest' => $code]);
         $this->post('/auth/otp/verify', ['code' => $code])->assertRedirect('/app')
@@ -130,6 +137,22 @@ final class FamilyLoginTest extends TestCase
         Http::assertNothingSent();
         $this->post('/auth/otp/verify', ['code' => '123456'])->assertSessionHasErrors('code');
         $this->assertGuest();
+    }
+
+    public function test_otp_falls_back_to_text_when_the_gateway_rejects_the_button(): void
+    {
+        $this->guardian();
+        $this->menuStatus = 422;
+
+        $this->post('/auth/otp', ['phone' => self::GUARDIAN_PHONE])->assertRedirect('/login');
+
+        $code = $this->sentCode(self::GUARDIAN_PHONE);
+        $sent = Http::recorded(fn (Request $request) => $request->method() === 'POST')->values();
+        $this->assertCount(2, $sent);
+        $this->assertSame('https://gateway.example/send/menu', $sent[0][0]->url());
+        $this->assertSame('https://gateway.example/send/text', $sent[1][0]->url());
+        $this->assertSame($sent[0][0]['text'], $sent[1][0]['text']);
+        $this->post('/auth/otp/verify', ['code' => $code])->assertRedirect('/app');
     }
 
     public function test_linked_guardian_can_edit_the_child_profile_and_invalidates_access_on_number_change(): void

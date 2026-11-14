@@ -70,7 +70,7 @@ final class MissionNotices
                 $timezone = $recipient->family->timezone;
                 $deadline = $this->localTime($mission->due_at, $timezone);
                 $submittedAt = $this->localTime($mission->submitted_at, $timezone);
-                $message .= "\n\n🕒 Prazo: {$deadline}\n✅ Concluída em: {$submittedAt}";
+                $message .= "\n\n🕒 {$deadline}\n✅ {$submittedAt}";
                 $image = $mission->photo_path ? Storage::disk('local')->get($mission->photo_path) : null;
             }
 

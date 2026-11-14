@@ -83,7 +83,7 @@ final class MissionReviewTest extends TestCase
         $this->get('/app/missoes?status=in_review')->assertInertia(fn (Assert $page) => $page
             ->has('missions', 1)->where('missions.0.status', 'in_review'));
         $caption = "*DAG: 📝*\n*Tarefa para REVISÃO!*\n\n> Arrumar a cama\n_"
-            .$payload['comment']."_\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00";
+            .$payload['comment']."_\n\n🕒 09/11/2026 18:00\n✅ 09/11/2026 10:00";
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/menu'
             && $request['number'] === '5571999991111' && $request['type'] === 'button' && $request['text'] === $caption
             && $request['choices'] === ["Revisar|url:https://dag.example{$review}"]
@@ -157,7 +157,7 @@ final class MissionReviewTest extends TestCase
             ->assertRedirect($url)->assertSessionHasNoErrors();
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/text'
             && $request['number'] === '5571999991111'
-            && $request['text'] === "*DAG: 📝*\n*Tarefa para REVISÃO!*\n\n> Arrumar a cama\n_Terminei._\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00\n\nRevisar: https://dag.example{$review}");
+            && $request['text'] === "*DAG: 📝*\n*Tarefa para REVISÃO!*\n\n> Arrumar a cama\n_Terminei._\n\n🕒 09/11/2026 18:00\n✅ 09/11/2026 10:00\n\nRevisar: https://dag.example{$review}");
 
         $submission = DB::table('mission_submissions')->value('id');
         $this->as($guardian)->post($review, ['submission_id' => $submission, 'decision' => 'rejected', 'feedback' => 'Faltou a coberta.'])
@@ -191,7 +191,7 @@ final class MissionReviewTest extends TestCase
         $this->assertDatabaseHas('task_occurrences', ['id' => $mission, 'status' => 'in_review']);
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/menu'
             && $request['number'] === '5571999991111'
-            && $request['text'] === "*DAG: 📝*\n*Tarefa para REVISÃO!*\n\n> Arrumar a cama\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00");
+            && $request['text'] === "*DAG: 📝*\n*Tarefa para REVISÃO!*\n\n> Arrumar a cama\n\n🕒 09/11/2026 18:00\n✅ 09/11/2026 10:00");
     }
 
     public function test_guardian_can_filter_by_day_and_correct_a_review_until_allowance_closes(): void
