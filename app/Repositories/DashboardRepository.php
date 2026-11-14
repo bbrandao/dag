@@ -37,11 +37,11 @@ final class DashboardRepository
         return [$missions, $payments];
     }
 
-    public function periodTotals(User $guardian, Collection $ids, array $periods, DateTimeInterface $now): Collection
+    public function periodTotals(User $user, Collection $ids, array $periods, DateTimeInterface $now): Collection
     {
         $query = DB::table('task_occurrences as missions')
             ->leftJoin('point_credits as credits', 'credits.occurrence_id', '=', 'missions.id')
-            ->where('missions.family_id', $guardian->family_id)->whereIn('missions.child_id', $ids)
+            ->where('missions.family_id', $user->family_id)->whereIn('missions.child_id', $ids)
             ->where('missions.opens_at', '<=', $now)
             ->where(fn ($query) => $query
                 ->whereBetween('missions.due_at', $periods['month'])

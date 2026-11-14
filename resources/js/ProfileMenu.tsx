@@ -1,5 +1,5 @@
 import { Link, router, useForm } from '@inertiajs/react';
-import { ClipboardList, Download, LogOut, Settings, Users } from 'lucide-react';
+import { ClipboardList, Download, LogOut, Settings, Users, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { Avatar, AvatarFallback } from './components/ui/avatar';
 import { Badge } from './components/ui/badge';
@@ -66,7 +66,7 @@ export function ProfileMenu({ viewer, installation, side, open, onOpenChange }: 
                     <Badge className="bg-dag-lilac px-2 py-1 capitalize">{role}</Badge>
                 </div>
                 <hr className="my-2 border-0 border-t border-solid border-dag-line" />
-                {viewer.role === 'guardian' && <>
+                {viewer.role === 'guardian' ? <>
                     <Button asChild className="w-full justify-start bg-white hover:bg-dag-lilac">
                         <Link href="/guardian/children" onClick={() => onOpenChange(false)}>
                             <Users aria-hidden="true" size={17} /> Filhos
@@ -83,8 +83,19 @@ export function ProfileMenu({ viewer, installation, side, open, onOpenChange }: 
                             <Settings aria-hidden="true" size={17} /> Configurações
                         </Link>
                     </Button>
-                    <hr className="my-2 border-0 border-t border-solid border-dag-line" />
+                </> : <>
+                    <Button asChild className="w-full justify-start bg-white hover:bg-dag-lilac">
+                        <Link href="/app/missoes" onClick={() => onOpenChange(false)}>
+                            <ClipboardList aria-hidden="true" size={17} /> Minhas Missões
+                        </Link>
+                    </Button>
+                    <Button asChild className="w-full justify-start bg-white hover:bg-dag-lilac">
+                        <Link href="/app/ganhos" onClick={() => onOpenChange(false)}>
+                            <Wallet aria-hidden="true" size={17} /> Meus Ganhos
+                        </Link>
+                    </Button>
                 </>}
+                <hr className="my-2 border-0 border-t border-solid border-dag-line" />
                 <Switch checked={notifications.enabled} disabled={!notifications.available || notifications.busy || logout.processing}
                     aria-describedby="dag-push-hint" onClick={() => { void notifications.toggle(); }}>
                     Notificações

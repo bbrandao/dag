@@ -1,5 +1,5 @@
-import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft } from 'lucide-react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { ArrowLeft, Camera, Images } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { formatDate, nameInitials, type MissionStatus, missionStatuses } from '../tasks';
 import { MissionBadges, MissionDeadline } from '../MissionCard';
@@ -70,6 +70,8 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
     const [cameraReady, setCameraReady] = useState(false);
     const [cameraFailed, setCameraFailed] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
+    const cameraInput = useRef<HTMLInputElement>(null);
+    const galleryInput = useRef<HTMLInputElement>(null);
     const cameraRequest = useRef<AbortController | null>(null);
     const supportsCamera = Boolean(navigator.mediaDevices?.getUserMedia);
     const photo = form.data.photo;
@@ -171,23 +173,30 @@ function SubmissionForm({ mission, requestId }: { mission: MissionDetails; reque
                 {mission.photo_mode !== 'disabled' && (
                     <fieldset className="options">
                         <legend>Foto {mission.photo_mode === 'required' ? 'obrigatória' : 'opcional'}</legend>
-                        {supportsCamera && !cameraOpen && <button type="button" className="secondary" disabled={form.processing || preparing}
-                            onClick={() => { void openCamera(); }}>Abrir câmera</button>}
+                        <div className="mb-2 grid grid-cols-2 gap-2">
+                            <Button type="button" className="h-20 cursor-pointer flex-col" disabled={form.processing || preparing || cameraOpen}
+                                onClick={() => {
+                                    if (supportsCamera && !cameraFailed) void openCamera();
+                                    else cameraInput.current?.click();
+                                }}>
+                                <Camera size={22} aria-hidden="true" /> Câmera
+                            </Button>
+                            <Button type="button" className="h-20 cursor-pointer flex-col" disabled={form.processing || preparing || cameraOpen}
+                                onClick={() => galleryInput.current?.click()}>
+                                <Images size={22} aria-hidden="true" /> Galeria
+                            </Button>
+                        </div>
+                        <input ref={cameraInput} type="file" hidden accept="image/*" capture="environment"
+                            onChange={event => { void choosePhoto(event.currentTarget); }} />
+                        <input ref={galleryInput} type="file" hidden accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+                            onChange={event => { void choosePhoto(event.currentTarget); }} />
                         <div hidden={!cameraOpen}>
                             <video ref={videoRef} className="evidence" muted playsInline aria-label="Prévia da câmera" />
                             {!cameraReady && <p role="status">Aguardando acesso à câmera…</p>}
                             <button type="button" disabled={!cameraReady || preparing} onClick={() => { void takePhoto(); }}>Tirar foto</button>
                             <button type="button" className="secondary" onClick={closeCamera}>Fechar câmera</button>
                         </div>
-                        {cameraFailed && <p role="status">Não foi possível abrir a câmera no DAG. Use a câmera do celular ou a galeria.</p>}
-                        {(!supportsCamera || cameraFailed) && !cameraOpen && <label>Câmera do celular
-                            <input type="file" accept="image/*" capture="environment" disabled={form.processing || preparing}
-                                onChange={event => { void choosePhoto(event.currentTarget); }} />
-                        </label>}
-                        <label>Escolher da galeria
-                            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" disabled={form.processing || preparing || cameraOpen}
-                                onChange={event => { void choosePhoto(event.currentTarget); }} />
-                        </label>
+                        {cameraFailed && <p role="status">Toque em Câmera novamente para usar a câmera do celular ou escolha uma foto na Galeria.</p>}
                         {preparing && <p role="status">Preparando foto…</p>}
                         {preview && !previewFailed && <img className="evidence" src={preview} alt="Prévia da foto escolhida"
                             onError={() => setPreviewFailed(true)} />}
@@ -259,13 +268,14 @@ export default function Mission({ mission, attempts, reopening, requestId, isGua
     mission: MissionDetails; attempts: Attempt[]; reopening: string | null; requestId: string; isGuardian: boolean;
     creditSettled: boolean; reviewQuery: string;
 }) {
+    const childQuery = usePage().url.split('?')[1];
     return (
         <main className="screen">
             <Head title={mission.title} />
             <header className="topbar">
                 <h1>{mission.title}</h1>
                 <Button asChild className="shrink-0"><Link href={isGuardian
-                    ? `/guardian/revisoes${reviewQuery ? `?${reviewQuery}` : ''}` : '/app/missoes'}>
+                    ? `/guardian/revisoes${reviewQuery ? `?${reviewQuery}` : ''}` : `/app/missoes${childQuery ? `?${childQuery}` : ''}`}>
                     <ArrowLeft size={17} aria-hidden="true" /> Voltar
                 </Link></Button>
             </header>

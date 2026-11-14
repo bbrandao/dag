@@ -48,26 +48,24 @@ export function MissionDeadline({ due }: { due: string }) {
     </p>;
 }
 
-export function MissionCard({ mission, today }: { mission: MissionSummary; today: string }) {
-    const expired = mission.status === 'expired';
-    const actionable = mission.status === 'pending' || mission.status === 'adjustment';
-    const label = mission.status === 'pending' ? 'Concluir' : mission.status === 'adjustment' ? 'Enviar ajuste' : 'Ver detalhes';
-
+export function MissionCard({ mission, date, query }: { mission: MissionSummary; date: string; query?: string }) {
     return (
-        <article className={`card mission-card status-${mission.status}`}>
-            <div className="mission-card-labels">
-                <MissionStatusBadge status={mission.status} />
-                {actionable && <span className="tag reward">Vale {mission.points} pontos</span>}
-                {mission.status === 'approved' && <span className="tag mission-status status-approved">+{mission.points} pontos conquistados</span>}
-            </div>
-            <h3>{mission.title}</h3>
-            <p>{frequencies[mission.frequency]} · <time dateTime={mission.due_at}>
-                {mission.due_on === today ? 'Hoje' : formatDate(mission.due_on)} até {mission.due_time}
-            </time></p>
-            <p className="criteria">{mission.criteria}</p>
-            {expired && <p>Prazo encerrado. Aguarde a reabertura pelo responsável.</p>}
-            {mission.status === 'in_review' && <p>Entrega enviada. Aguardando o responsável.</p>}
-            <Link className={actionable ? 'button' : 'button secondary'} href={`/app/missoes/${mission.id}`}>{label}</Link>
+        <article className={`card mission-card status-${mission.status} p-0!`}>
+            <Link href={`/app/missoes/${mission.id}${query ? `?${query}` : ''}`}
+                className="block rounded-[inherit] p-4 text-dag-ink no-underline hover:bg-dag-lilac/40 sm:p-6">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <MissionStatusBadge status={mission.status} review />
+                    <Badge className="ml-auto px-3 py-1.5">Vale {mission.points} {mission.points === 1 ? 'ponto' : 'pontos'}</Badge>
+                </div>
+                <h3 className="m-0! wrap-anywhere">{mission.title}</h3>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Badge className="bg-dag-lilac">{frequencies[mission.frequency]}</Badge>
+                    <time className="inline-flex items-center gap-1 text-sm tabular-nums" dateTime={mission.due_at}>
+                        <Clock size={16} aria-hidden="true" />
+                        {mission.due_on !== date && `${formatDate(mission.due_on)} - `}{mission.due_time}
+                    </time>
+                </div>
+            </Link>
         </article>
     );
 }

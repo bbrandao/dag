@@ -28,32 +28,23 @@ function ValueBadge({ cents }: { cents: number | null }) {
     </Badge>;
 }
 
-function PointEntries({ credits, empty, statement = false }: { credits: AllowanceProps['credits']; empty: string; statement?: boolean }) {
+function PointEntries({ credits, empty }: { credits: AllowanceProps['credits']; empty: string }) {
     if (credits.length === 0) return <p>{empty}</p>;
 
-    if (statement) {
-        return <div>
-            {credits.map(credit => (
-                <article className="grid gap-1 border-x-0 border-b-0 border-t border-solid border-dag-line py-3 first:border-t-0 first:pt-0 last:pb-0" key={credit.id}>
-                    <div className="text-sm text-dag-muted">
-                        {credit.completed_at ?? `Aprovada em ${credit.approved_at}`}
-                    </div>
-                    <strong>{credit.title}</strong>
-                    <div className="flex flex-wrap gap-2">
-                        <PointsBadge points={credit.points} />
-                        <ValueBadge cents={credit.amount_cents} />
-                    </div>
-                </article>
-            ))}
-        </div>;
-    }
-
-    return credits.map(credit => (
-        <article className="ledger-entry" key={credit.id}>
-            <p><strong>{credit.title}</strong> · +{credit.points} {credit.points === 1 ? 'ponto' : 'pontos'}</p>
-            <p>{credit.approved_at} · {credit.amount_cents === null ? 'Aguardando taxa' : money(credit.amount_cents)}</p>
-        </article>
-    ));
+    return <div>
+        {credits.map(credit => (
+            <article className="grid gap-1 border-x-0 border-b-0 border-t border-solid border-dag-line py-3 first:border-t-0 first:pt-0 last:pb-0" key={credit.id}>
+                <div className="text-sm text-dag-muted">
+                    {credit.completed_at ?? `Aprovada em ${credit.approved_at}`}
+                </div>
+                <strong>{credit.title}</strong>
+                <div className="flex flex-wrap gap-2">
+                    <PointsBadge points={credit.points} />
+                    <ValueBadge cents={credit.amount_cents} />
+                </div>
+            </article>
+        ))}
+    </div>;
 }
 
 interface AllowanceProps {
@@ -127,12 +118,12 @@ export default function Allowance(props: AllowanceProps) {
 
     return (
         <main className="screen">
-            <Head title={isGuardian ? 'Mesadas' : 'Meus ganhos'} />
+            <Head title={isGuardian ? 'Mesadas' : 'Meus Ganhos'} />
             <header className="topbar">
-                <h1>{isGuardian ? 'Mesadas' : 'Meus ganhos'}</h1>
+                <h1>{isGuardian ? 'Mesadas' : 'Meus Ganhos'}</h1>
                 <Button asChild><Link href="/app"><ArrowLeft size={17} aria-hidden="true" /> Voltar</Link></Button>
             </header>
-            {isGuardian ? <section className="card grid gap-4" aria-label="Resumo dos ganhos">
+            <section className="card grid gap-4" aria-label="Resumo dos ganhos">
                 <h2 className="m-0 flex items-center gap-2 text-lg">
                     <Avatar aria-hidden="true"><AvatarFallback>{nameInitials(child.name)}</AvatarFallback></Avatar>
                     {child.name}
@@ -149,12 +140,9 @@ export default function Allowance(props: AllowanceProps) {
                         <dt>Total Recebido</dt><dd className="m-0 font-bold wrap-anywhere">{money(props.paidCents)}</dd>
                     </div>
                 </dl>
-            </section> : <section className="card" aria-label="Resumo dos ganhos">
-                <p className="tag reward">{props.availablePoints} pontos disponíveis</p>
-                <p>{props.unpriced ? 'Há pontos aguardando a primeira conversão.' : `Equivalente a ${money(props.availableCents)}`}</p>
-                <p><strong>{money(props.pendingCents)}</strong> a receber</p>
-                <p><strong>{money(props.paidCents)}</strong> já recebido</p>
-            </section>}
+                {!isGuardian && <Button type="button" className="w-fit cursor-pointer"
+                    onClick={() => statement.current?.showModal()}>Ver extrato</Button>}
+            </section>
             {isGuardian && (
                 <section className="card" id="fechamento">
                     <h2>Encerrar ciclo de mesada</h2>
@@ -205,7 +193,7 @@ export default function Allowance(props: AllowanceProps) {
             </details>
             <details className="card group scroll-mt-20" id="evolucao">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
-                    <h2 className="m-0">{isGuardian ? 'Últimos 6 meses' : 'Evolução nos últimos 6 meses'}</h2><ChevronDown size={19} className="shrink-0 text-dag-purple group-open:rotate-180" aria-hidden="true" />
+                    <h2 className="m-0">Últimos 6 meses</h2><ChevronDown size={19} className="shrink-0 text-dag-purple group-open:rotate-180" aria-hidden="true" />
                 </summary>
                 <div className="mt-4">
                     <div className="point-trend" aria-hidden="true">
@@ -232,21 +220,20 @@ export default function Allowance(props: AllowanceProps) {
                     </div>
                 </div>
             </details>
-            {isGuardian ? <dialog ref={statement} aria-labelledby="points-statement-title"
+            <dialog ref={statement} aria-labelledby="points-statement-title"
                 className="fixed inset-0 m-auto h-[70dvh] w-[80vw] max-w-none overflow-hidden rounded-2xl border border-solid border-dag-line bg-white p-0 text-dag-ink shadow-xl backdrop:bg-dag-ink/55">
                 <div className="flex h-full min-h-0 flex-col">
                     <header className="flex items-center justify-between gap-2 p-4">
                         <h2 id="points-statement-title" className="m-0! text-lg">Extrato de Pontos</h2>
                         <Button type="button" autoFocus className="shrink-0 cursor-pointer" onClick={() => statement.current?.close()}>Fechar</Button>
                     </header>
-                    <div className="min-h-0 flex-1 overflow-y-auto p-4" tabIndex={0} role="region" aria-label="Pontos fora de ciclos encerrados">
-                        <PointEntries statement credits={credits} empty="Nenhum ponto disponível fora de um ciclo encerrado." />
+                    <div className="min-h-0 flex-1 overflow-y-auto p-4" tabIndex={0} role="region"
+                        aria-label={isGuardian ? 'Pontos fora de ciclos encerrados' : 'Pontos aprovados recentemente'}>
+                        <PointEntries credits={credits} empty={isGuardian
+                            ? 'Nenhum ponto disponível fora de um ciclo encerrado.' : 'Nenhum ponto aprovado neste período.'} />
                     </div>
                 </div>
-            </dialog> : <section className="card">
-                <h2>Extrato de pontos</h2>
-                <PointEntries credits={credits} empty="Nenhum ponto aprovado neste período." />
-            </section>}
+            </dialog>
             {isGuardian && <dialog ref={confirmation} aria-labelledby="close-cycle-title" aria-describedby="close-cycle-description"
                 aria-busy={closing.processing || refreshing} onCancel={event => {
                     if (closing.processing || refreshing) event.preventDefault();

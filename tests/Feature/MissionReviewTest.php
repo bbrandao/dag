@@ -79,7 +79,9 @@ final class MissionReviewTest extends TestCase
         $this->assertDatabaseHas('mission_notices', ['recipient_id' => $guardian->id, 'kind' => 'submitted', 'status' => 'sent']);
         $this->assertDatabaseMissing('mission_notices', ['recipient_id' => $child->id]);
         $this->get('/app')->assertInertia(fn (Assert $page) => $page
-            ->where('childMissions.missions.0.status', 'in_review'));
+            ->has('childMissions.missions', 0)->where('progress.0.periods.day.inReview', 1));
+        $this->get('/app/missoes?status=in_review')->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.status', 'in_review'));
         $caption = "*DAG: 📝*\n*Tarefa para REVISÃO!*\n\n> Arrumar a cama\n_"
             .$payload['comment']."_\n\n🕒 Prazo: 09/11/2026 18:00\n✅ Concluída em: 09/11/2026 10:00";
         Http::assertSent(fn (Request $request) => $request->url() === 'https://gateway.example/send/menu'
@@ -132,7 +134,9 @@ final class MissionReviewTest extends TestCase
         $this->as($child)->get($url)->assertInertia(fn (Assert $page) => $page
             ->component('Mission')->where('mission.status', 'approved')->where('attempts.0.feedback', 'Muito bem!'));
         $this->get('/app')->assertInertia(fn (Assert $page) => $page->where('earnedPoints', 10)
-            ->where('childMissions.missions.0.status', 'approved'));
+            ->has('childMissions.missions', 0)->where('progress.0.periods.day.approved', 1));
+        $this->get('/app/missoes?status=approved')->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.status', 'approved'));
         $this->getJson('/app/avisos/contagem')->assertExactJson(['unread' => 1]);
 
         $this->travel(91)->days();
@@ -254,7 +258,12 @@ final class MissionReviewTest extends TestCase
         $this->as($guardian)->post("{$review}/reabrir", ['new_due_at' => '2026-11-09T20:00', 'reason' => 'Prazo estendido.'])
             ->assertRedirect($review)->assertSessionHasNoErrors();
         $this->assertDatabaseCount('mission_reopenings', 1);
-        $this->as($child)->post("{$url}/entregas", $payload)->assertRedirect($url)->assertSessionHasNoErrors();
+        $this->as($child)->get('/app')->assertInertia(fn (Assert $page) => $page
+            ->has('childMissions.missions', 1)->where('childMissions.missions.0.id', $mission)
+            ->where('childMissions.missions.0.status', 'adjustment')->where('childMissions.missions.0.due_time', '20:00'));
+        $this->get('/app/missoes?status=adjustment')->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.id', $mission));
+        $this->post("{$url}/entregas", $payload)->assertRedirect($url)->assertSessionHasNoErrors();
         $this->assertDatabaseCount('mission_submissions', 2);
         $this->assertDatabaseHas('task_occurrences', ['id' => $mission, 'status' => 'in_review']);
         $newAttempt = DB::table('mission_submissions')->where('request_id', $payload['request_id'])->value('id');

@@ -90,31 +90,28 @@ final class TaskRepository
         DB::table('task_occurrences')->insertOrIgnore($rows);
     }
 
-    public function childMissions(User $child, ?string $frequency, DateTimeInterface $now, ?string $today = null): Collection
+    public function childMissions(User $child, ?string $frequency, DateTimeInterface $now, DateTimeInterface $start, DateTimeInterface $end): Collection
     {
         return $this->openedMissions($child, $now)
             ->when($frequency, fn ($query) => $query->where('task_occurrences.frequency', $frequency))
-            ->when($frequency === null && $today !== null, fn (Builder $query) => $this->hideEarlyMonthly($query, $today))
+            ->where('due_at', '>=', $start)
+            ->where('due_at', '<', $end)
             ->get();
     }
 
-    public function dashboardMissions(User $child, DateTimeInterface $now, string $today): Collection
+    public function dashboardMissions(User $child, DateTimeInterface $now, DateTimeInterface $endOfDay): Collection
     {
-        $missions = $this->openedMissions($child, $now);
-        $this->hideEarlyMonthly($missions, $today);
-        $actionable = (clone $missions)->whereIn('status', ['pending', 'adjustment']);
-        $open = (clone $actionable)->where('due_at', '>', $now)->limit(5)->get();
-        $expired = $actionable->where('due_at', '<=', $now)->limit(5)->get();
-        $reviewed = $missions->whereIn('status', ['in_review', 'approved', 'rejected'])
-            ->limit(5)->get();
+        $missions = $this->openedMissions($child, $now)
+            ->where('due_at', '>', $now)
+            ->where('due_at', '<', $endOfDay)
+            ->where(fn (Builder $query) => $query->where('status', 'pending')
+                ->orWhere(fn (Builder $reopened) => $reopened->where('status', 'adjustment')
+                    ->whereExists(fn (Builder $history) => $history->selectRaw('1')->from('mission_reopenings')
+                        ->whereColumn('occurrence_id', 'task_occurrences.id')
+                        ->whereColumn('new_due_at', 'task_occurrences.due_at'))));
+        $nextDeadline = (clone $missions)->reorder()->select(DB::raw('MIN(task_occurrences.due_at)'));
 
-        return $open->concat($expired)->concat($reviewed);
-    }
-
-    private function hideEarlyMonthly(Builder $missions, string $today): Builder
-    {
-        return $missions->where(fn (Builder $visible) => $visible->where('task_occurrences.frequency', '!=', 'monthly')
-            ->orWhere('due_on', '<=', $today)->orWhere('status', '!=', 'pending'));
+        return $missions->where('task_occurrences.due_at', '=', $nextDeadline)->get();
     }
 
     private function openedMissions(User $child, DateTimeInterface $now): Builder

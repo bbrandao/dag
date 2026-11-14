@@ -107,21 +107,32 @@ final class TaskService
         return $task;
     }
 
-    public function missions(User $child, mixed $requested): array
+    public function missions(User $child, array $filters): array
     {
         abort_unless($child->role === User::CHILD, 403);
 
-        $frequency = in_array($requested, TaskTemplate::FREQUENCIES, true) ? $requested : null;
+        $frequency = $filters['frequency'] ?? null;
+        $status = $filters['status'] ?? null;
         $family = $child->family;
         $this->calendar->materialize($family, $child->id);
         $now = now();
         $today = $now->copy()->setTimezone($family->timezone)->toDateString();
-        $missions = $this->tasks->childMissions($child, $frequency, $now, $today)
-            ->map(fn (object $mission) => $this->displayMission($mission, $family->timezone, $now));
+        $date = $filters['date'] ?? $today;
+        $day = CarbonImmutable::parse($date, $family->timezone)->startOfDay();
+        [$start, $end] = match ($frequency) {
+            'weekly', 'monthly' => [$day->startOfMonth(), $day->startOfMonth()->addMonth()],
+            'yearly' => [$day->startOfYear(), $day->startOfYear()->addYear()],
+            default => [$day, $day->addDay()],
+        };
+        $missions = $this->tasks->childMissions($child, $frequency, $now, $start->utc(), $end->utc())
+            ->map(fn (object $mission) => $this->displayMission($mission, $family->timezone, $now))
+            ->when($status !== null, fn ($results) => $results->where('status', $status)->values());
 
         return [
             'missions' => $missions,
             'frequency' => $frequency,
+            'status' => $status,
+            'date' => $date,
             'today' => $today,
         ];
     }
@@ -132,12 +143,13 @@ final class TaskService
         $this->calendar->materialize($child->family, $child->id);
         $now = now();
         $timezone = $child->family->timezone;
-        $today = $now->copy()->setTimezone($timezone)->toDateString();
+        $now = $now->toImmutable();
+        $day = $now->setTimezone($timezone)->startOfDay();
 
         return [
-            'missions' => $this->tasks->dashboardMissions($child, $now, $today)
+            'missions' => $this->tasks->dashboardMissions($child, $now, $day->addDay()->utc())
                 ->map(fn (object $mission) => $this->displayMission($mission, $timezone, $now)),
-            'today' => $today,
+            'today' => $day->toDateString(),
         ];
     }
 

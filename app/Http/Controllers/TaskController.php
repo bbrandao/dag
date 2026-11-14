@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SaveTaskRequest;
+use App\Models\TaskTemplate;
 use App\Services\TaskService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -66,6 +67,12 @@ final class TaskController
     {
         Inertia::encryptHistory();
 
-        return Inertia::render('Missions', $this->tasks->missions($request->user(), $request->query('frequency')));
+        $filters = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'frequency' => ['nullable', 'in:'.implode(',', TaskTemplate::FREQUENCIES)],
+            'status' => ['nullable', 'in:pending,approved,expired,in_review,adjustment'],
+        ]);
+
+        return Inertia::render('Missions', $this->tasks->missions($request->user(), $filters));
     }
 }

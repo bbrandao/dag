@@ -65,7 +65,7 @@ final class DashboardService
         ];
         $periods = null;
         $projected = [];
-        if ($user->role === User::GUARDIAN && $ids->isNotEmpty()) {
+        if ($ids->isNotEmpty()) {
             $projected = $this->calendar->projectedTotals($user->family, $ids, $now, max($windows['week'][1], $windows['month'][1]));
             $periods = $this->dashboard->periodTotals($user, $ids, array_map(
                 fn (array $window) => [$window[0]->utc(), $window[1]->utc()], $windows,

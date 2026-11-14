@@ -1,47 +1,98 @@
-import { Head, Link } from '@inertiajs/react';
-import { type Frequency } from '../tasks';
+import { Head, Link, router } from '@inertiajs/react';
+import { ArrowLeft, LoaderCircle } from 'lucide-react';
+import { useState } from 'react';
+import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
 import { MissionCard, type MissionSummary } from '../MissionCard';
+import { frequencies, type Frequency } from '../tasks';
 
-const filters: [Frequency | null, string][] = [
-    [null, 'Todas'], ['daily', 'Diárias'], ['weekly', 'Semanais'], ['monthly', 'Mensais'], ['yearly', 'Anuais'],
-];
+const statuses = {
+    '': 'Todos',
+    pending: 'A Fazer',
+    approved: 'Concluída',
+    expired: 'Vencida',
+    in_review: 'Em Revisão',
+    adjustment: 'Em Ajuste',
+};
+type Status = keyof typeof statuses;
 
-export default function Missions({ missions, frequency, today }: {
+export default function Missions({ missions, date, today, frequency, status }: {
     missions: MissionSummary[];
-    frequency: Frequency | null;
+    date: string;
     today: string;
+    frequency: Frequency | null;
+    status: Status | null;
 }) {
-    const open = missions.filter(mission => mission.status === 'pending' || mission.status === 'adjustment');
-    const groups = [
-        { title: 'Hoje', missions: open.filter(mission => mission.due_on === today) },
-        { title: 'Próximas', missions: open.filter(mission => mission.due_on !== today) },
-        { title: 'Vencidas', missions: missions.filter(mission => mission.status === 'expired') },
-        { title: 'Em revisão', missions: missions.filter(mission => mission.status === 'in_review') },
-        { title: 'Concluídas', missions: missions.filter(mission => mission.status === 'approved') },
-        { title: 'Reprovadas', missions: missions.filter(mission => mission.status === 'rejected') },
-    ];
+    const [selected, setSelected] = useState(date);
+    const [selectedStatus, setSelectedStatus] = useState<Status>(status ?? '');
+    const [selectedFrequency, setSelectedFrequency] = useState<Frequency | ''>(frequency ?? '');
+    const [busy, setBusy] = useState(false);
+    const [failed, setFailed] = useState(false);
+    const points = missions.reduce((sum, mission) => sum + mission.points, 0);
+    const query = new URLSearchParams({ date, ...(status && { status }), ...(frequency && { frequency }) }).toString();
+
+    function showError() {
+        setFailed(true);
+        return false as const;
+    }
 
     return (
         <main className="screen">
-            <Head title="Minhas missões" />
+            <Head title="Minhas Missões" />
             <header className="topbar">
-                <h1>Minhas missões</h1>
-                <Link className="button secondary" href="/app">Voltar</Link>
+                <h1>Minhas Missões</h1>
+                <Button asChild className="shrink-0"><Link href="/app"><ArrowLeft size={17} aria-hidden="true" /> Voltar</Link></Button>
             </header>
-            <nav className="filters" aria-label="Filtrar missões por periodicidade">
-                {filters.map(([value, label]) => (
-                    <Link key={label} className={`button ${frequency === value ? '' : 'secondary'}`}
-                        aria-current={frequency === value ? 'page' : undefined}
-                        href={value ? `/app/missoes?frequency=${value}` : '/app/missoes'}>{label}</Link>
-                ))}
-            </nav>
-            {missions.length === 0 && <p className="card">Nenhuma missão neste filtro.</p>}
-            {groups.filter(group => group.missions.length > 0).map(group => (
-                <section key={group.title} aria-label={group.title}>
-                    <h2>{group.title}</h2>
-                    {group.missions.map(mission => <MissionCard key={mission.id} mission={mission} today={today} />)}
-                </section>
-            ))}
+            <form className="card" aria-labelledby="mission-filters" aria-busy={busy} onSubmit={event => {
+                event.preventDefault();
+                if (busy) return;
+                setBusy(true);
+                setFailed(false);
+                router.get('/app/missoes', {
+                    date: selected,
+                    ...(selectedStatus && { status: selectedStatus }),
+                    ...(selectedFrequency && { frequency: selectedFrequency }),
+                }, {
+                    only: ['missions', 'date', 'today', 'status', 'frequency', 'errors'],
+                    preserveState: true, preserveScroll: true,
+                    onHttpException: showError, onNetworkError: showError, onError: showError,
+                    onFinish: () => setBusy(false),
+                });
+            }}>
+                <h2 id="mission-filters">Filtros</h2>
+                <div className="field-grid">
+                    <label htmlFor="mission-date">Data/Dia
+                        <input id="mission-date" type="date" value={selected} max={today} disabled={busy} required
+                            onChange={event => setSelected(event.target.value)} />
+                    </label>
+                    <label htmlFor="mission-status">Status
+                        <select id="mission-status" value={selectedStatus} disabled={busy}
+                            onChange={event => setSelectedStatus(event.target.value as Status)}>
+                            {Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                    </label>
+                    <label htmlFor="mission-frequency">Tipo
+                        <select id="mission-frequency" value={selectedFrequency} disabled={busy}
+                            onChange={event => setSelectedFrequency(event.target.value as Frequency | '')}>
+                            <option value="">Todos</option>
+                            {Object.entries(frequencies).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                    </label>
+                </div>
+                <Button type="submit" disabled={busy} className="mt-2 w-fit cursor-pointer bg-dag-purple text-white hover:bg-[#452497]">
+                    {busy && <LoaderCircle size={17} className="motion-safe:animate-spin" aria-hidden="true" />}
+                    {busy ? 'Filtrando…' : 'Filtrar'}
+                </Button>
+                {failed && <p className="error" role="alert">Não foi possível filtrar as missões. Tente novamente.</p>}
+            </form>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2" aria-live="polite">
+                <Badge className="bg-[#164875] px-3 py-1.5 text-white">{missions.length} {missions.length === 1 ? 'tarefa' : 'tarefas'}</Badge>
+                <Badge className="ml-auto px-3 py-1.5">{points} {points === 1 ? 'ponto' : 'pontos'}</Badge>
+            </div>
+            <section aria-label="Missões encontradas" aria-busy={busy}>
+                {missions.length === 0 && <p className="card">Nenhuma missão encontrada para os filtros selecionados.</p>}
+                {missions.map(mission => <MissionCard key={mission.id} mission={mission} date={date} query={query} />)}
+            </section>
         </main>
     );
 }

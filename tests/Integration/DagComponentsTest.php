@@ -95,18 +95,18 @@ final class DagComponentsTest extends TestCase
         $task = $repository->forGuardian($guardian, collect([$child->id]))->sole();
         $service->save($guardian, [...$payload, 'title' => 'Novo nome'], $task->id);
 
-        $this->assertSame('Tarefa teste', $repository->childMissions($child, 'daily', now())->sole()->title);
+        $this->assertSame('Tarefa teste', $repository->childMissions($child, 'daily', now(), now()->startOfDay(), now()->addDay()->startOfDay())->sole()->title);
         $this->assertSame('Novo nome', $service->dashboard($guardian)['tasks']->sole()['title']);
         $service->delete($guardian, $task->id);
         $this->assertTrue($repository->forGuardian($guardian, collect([$child->id]))->isEmpty());
-        $this->assertCount(1, $service->missions($child, 'daily')['missions']);
+        $this->assertCount(1, $service->missions($child, ['frequency' => 'daily'])['missions']);
     }
 
     public function test_mission_services_credit_once_and_inbox_reads_are_per_recipient(): void
     {
         [$guardian, $child] = $this->family();
         app(TaskService::class)->save($guardian, $this->taskData($child));
-        $mission = app(TaskRepository::class)->childMissions($child, null, now())->sole();
+        $mission = app(TaskRepository::class)->childMissions($child, null, now(), now()->startOfDay(), now()->addDay()->startOfDay())->sole();
         $service = app(MissionService::class);
         $repository = app(MissionRepository::class);
         $overview = app(MissionOverview::class);
@@ -134,7 +134,7 @@ final class DagComponentsTest extends TestCase
     {
         [$guardian, $child] = $this->family();
         app(TaskService::class)->save($guardian, $this->taskData($child));
-        $mission = app(TaskRepository::class)->childMissions($child, null, now())->sole();
+        $mission = app(TaskRepository::class)->childMissions($child, null, now(), now()->startOfDay(), now()->addDay()->startOfDay())->sole();
         $ledger = app(AllowanceLedger::class);
         $occurrence = app(MissionRepository::class)->find($child, $mission->id);
         $ledger->credit($occurrence, now()->toImmutable());
@@ -161,7 +161,7 @@ final class DagComponentsTest extends TestCase
         [$guardian, $child] = $this->family();
         app(FamilyRepository::class)->setNoticePreference($guardian, true);
         app(TaskService::class)->save($guardian, $this->taskData($child));
-        $mission = app(TaskRepository::class)->childMissions($child, null, now())->sole();
+        $mission = app(TaskRepository::class)->childMissions($child, null, now(), now()->startOfDay(), now()->addDay()->startOfDay())->sole();
         app(MissionService::class)->submit($child, $mission->id, ['request_id' => (string) Str::uuid()]);
         $repository = app(MissionNoticeRepository::class);
         $notice = $repository->ready(now(), null)->sole();
