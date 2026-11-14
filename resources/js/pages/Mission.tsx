@@ -1,7 +1,10 @@
 import { Head, Link, useForm } from '@inertiajs/react';
+import { ArrowLeft } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { formatDate, type MissionStatus, missionStatuses } from '../tasks';
-import { MissionStatusBadge } from '../MissionCard';
+import { formatDate, nameInitials, type MissionStatus, missionStatuses } from '../tasks';
+import { MissionBadges, MissionDeadline } from '../MissionCard';
+import { Avatar, AvatarFallback } from '../components/ui/avatar';
+import { Button } from '../components/ui/button';
 import { encodePhoto, snapshotPhoto } from '../photos';
 
 interface MissionDetails {
@@ -12,6 +15,7 @@ interface MissionDetails {
     original_date: string;
     criteria: string;
     points: number;
+    child_name: string | null;
     photo_mode: 'disabled' | 'optional' | 'required';
 }
 
@@ -260,13 +264,18 @@ export default function Mission({ mission, attempts, reopening, requestId, isGua
             <Head title={mission.title} />
             <header className="topbar">
                 <h1>{mission.title}</h1>
-                <Link className="button secondary" href={isGuardian
-                    ? `/guardian/revisoes${reviewQuery ? `?${reviewQuery}` : ''}` : '/app/missoes'}>Voltar</Link>
+                <Button asChild className="shrink-0"><Link href={isGuardian
+                    ? `/guardian/revisoes${reviewQuery ? `?${reviewQuery}` : ''}` : '/app/missoes'}>
+                    <ArrowLeft size={17} aria-hidden="true" /> Voltar
+                </Link></Button>
             </header>
             <section className={`card mission-card status-${mission.status}`}>
-                <div className="mission-card-labels"><MissionStatusBadge status={mission.status} /></div>
-                <p>{mission.points} pontos</p>
-                <p>Prazo {mission.due}</p>
+                <MissionBadges status={mission.status} points={mission.points} review={isGuardian} />
+                <MissionDeadline due={mission.due} />
+                {mission.child_name && <p className="flex items-center gap-2 font-semibold">
+                    <Avatar aria-hidden="true"><AvatarFallback>{nameInitials(mission.child_name)}</AvatarFallback></Avatar>
+                    {mission.child_name}
+                </p>}
                 <p className="criteria">{mission.criteria}</p>
                 {reopening && <p>Reaberta. Data original {formatDate(mission.original_date)}. {reopening}</p>}
             </section>

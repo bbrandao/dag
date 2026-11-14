@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Repositories\AllowanceRepository;
+use App\Repositories\FamilyRepository;
 use App\Repositories\MissionRepository;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
@@ -14,21 +15,28 @@ final class MissionOverview
         private readonly MissionRepository $missions,
         private readonly AllowanceRepository $allowances,
         private readonly TaskCalendar $calendar,
+        private readonly FamilyRepository $families,
     ) {}
 
     public function reviews(User $guardian, ?string $date = null, ?string $child = null, ?string $status = null): array
     {
         abort_unless($guardian->role === User::GUARDIAN, 403);
 
-        $today = now($guardian->family->timezone)->toDateString();
-        if ($date === $today) {
-            $this->calendar->materialize($guardian->family);
+        $timezone = $guardian->family->timezone;
+        $today = now($timezone)->toDateString();
+        $date ??= $today;
+        $children = $this->families->childrenForDashboard($guardian);
+        $profile = $child !== null ? $children->firstWhere('id', $child) : ($children->count() === 1 ? $children->first() : null);
+        if ($date === $today && ($child === null || $profile !== null)) {
+            $this->calendar->materialize($guardian->family, $profile?->id);
         }
-        $day = $date === null ? null : CarbonImmutable::parse($date, $guardian->family->timezone)->startOfDay();
-        $missions = $this->missions->reviewQueue($guardian, $date, $day?->utc(), $day?->addDay()->utc(), $child, $status)
-            ->map(fn (object $mission) => $this->display($mission, $guardian));
+        $day = CarbonImmutable::parse($date, $timezone)->startOfDay();
+        $missions = $this->missions->reviewQueue($guardian, $date, $day->utc(), $day->addDay()->utc(), $child, $status === 'in_review')
+            ->map(fn (object $mission) => $this->display($mission, $guardian))
+            ->when($status !== null, fn ($missions) => $missions->where('status', $status)->values());
 
-        return ['missions' => $missions, 'date' => $date, 'today' => $today, 'child' => $child, 'status' => $status];
+        return ['missions' => $missions, 'date' => $date, 'today' => $today, 'child' => $child, 'status' => $status,
+            'childName' => $profile?->name];
     }
 
     public function details(User $user, string $mission, string $routeRole): array
@@ -48,7 +56,10 @@ final class MissionOverview
         $reopening = $this->missions->latestReopeningReason($mission);
 
         return [
-            'mission' => $this->display($occurrence, $user),
+            'mission' => [
+                ...$this->display($occurrence, $user),
+                'child_name' => $routeRole === User::GUARDIAN ? User::whereKey($occurrence->child_id)->value('name') : $user->name,
+            ],
             'attempts' => $attempts,
             'reopening' => $reopening,
             'requestId' => (string) Str::uuid(),

@@ -95,7 +95,7 @@ final class MissionController
         return validator($request->query(), [
             'date' => ['nullable', 'date_format:Y-m-d'],
             'child' => ['nullable', 'uuid'],
-            'status' => ['nullable', 'in:in_review'],
+            'status' => ['nullable', 'in:pending,approved,expired,in_review,adjustment'],
         ])->validate();
     }
 }

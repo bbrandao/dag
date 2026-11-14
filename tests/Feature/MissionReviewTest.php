@@ -59,6 +59,12 @@ final class MissionReviewTest extends TestCase
         $this->as($child)->patch('/app/avisos', ['enabled' => true])->assertRedirect('/app');
         $url = "/app/missoes/{$mission}";
         $review = "/guardian/revisoes/{$mission}";
+        $this->as($guardian)->get('/guardian/revisoes')->assertInertia(fn (Assert $page) => $page
+            ->where('date', '2026-11-09')->where('childName', $child->name)
+            ->has('missions', 1)->where('missions.0.status', 'pending')->where('missions.0.points', 10));
+        $this->get($review)->assertInertia(fn (Assert $page) => $page->where('mission.child_name', $child->name));
+        $this->get('/guardian/revisoes?status=expired')->assertInertia(fn (Assert $page) => $page->has('missions', 0));
+        $this->as($child);
         $payload = ['request_id' => (string) Str::uuid(), 'comment' => str_repeat('a', 255)];
 
         $this->post("{$url}/entregas", [...$payload, 'comment' => str_repeat('a', 256)])->assertSessionHasErrors('comment');
@@ -106,6 +112,8 @@ final class MissionReviewTest extends TestCase
         $decision = ['submission_id' => $attempt->id, 'decision' => 'approved', 'feedback' => 'Muito bem!'];
         $this->post("{$review}?{$filters}", $decision)->assertRedirect("{$review}?{$filters}")->assertSessionHasNoErrors();
         $this->get("/guardian/revisoes?{$filters}")->assertInertia(fn (Assert $page) => $page->has('missions', 0));
+        $this->get('/guardian/revisoes?status=approved')->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.status', 'approved'));
         $this->get('/app')->assertInertia(fn (Assert $page) => $page
             ->where('progress.0.periods.day.approved', 1)->where('progress.0.periods.day.earned', 10)
             ->where('progress.0.periods.week.earned', 10)->where('progress.0.periods.month.earned', 10)
@@ -232,10 +240,15 @@ final class MissionReviewTest extends TestCase
         $decision = ['submission_id' => DB::table('mission_submissions')->value('id'), 'decision' => 'adjustment'];
         $this->as($guardian)->post($review, $decision)->assertSessionHasErrors('feedback');
         $this->post($review, [...$decision, 'feedback' => 'Dobre a coberta.'])->assertRedirect($review)->assertSessionHasNoErrors();
+        $this->get('/guardian/revisoes?status=adjustment')->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.status', 'adjustment'));
         $this->get('/app/avisos')->assertInertia(fn (Assert $page) => $page->has('events', 0));
         $this->assertDatabaseCount('point_credits', 0);
 
         $this->travelTo(Carbon::parse('2026-11-09 21:00:00', 'UTC'));
+        $this->get('/guardian/revisoes?status=adjustment')->assertInertia(fn (Assert $page) => $page->has('missions', 0));
+        $this->get('/guardian/revisoes?status=expired')->assertInertia(fn (Assert $page) => $page
+            ->has('missions', 1)->where('missions.0.status', 'expired'));
         $payload = ['request_id' => (string) Str::uuid()];
         $this->as($child)->post("{$url}/entregas", $payload)->assertSessionHasErrors('mission');
         $this->as($guardian)->post("{$review}/reabrir", ['new_due_at' => '2026-11-09T20:00', 'reason' => 'Prazo estendido.'])

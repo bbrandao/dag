@@ -24,6 +24,7 @@ h1 { font-size: clamp(1.8rem, 6vw, 2.5rem); }
 .mission-card { background: var(--mission-surface); border-inline-start: .35rem solid var(--mission-accent); }
 .mission-card-labels { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .75rem; }
 .mission-status { display: inline-flex; align-items: center; gap: .35rem; background: var(--mission-badge); color: var(--mission-ink); }
+.mission-status.review-pending { background: #ffe4a5; color: #694305; }
 .status-pending { --mission-surface: #faf6ff; --mission-accent: #6c46cd; --mission-badge: #e9ddff; --mission-ink: #462593; }
 .status-adjustment { --mission-surface: #fff8e6; --mission-accent: #a26908; --mission-badge: #ffe4a5; --mission-ink: #694305; }
 .status-in_review { --mission-surface: #f0f7ff; --mission-accent: #3470a6; --mission-badge: #d9ebff; --mission-ink: #164875; }

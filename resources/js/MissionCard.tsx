@@ -1,4 +1,6 @@
 import { Link } from '@inertiajs/react';
+import { Clock } from 'lucide-react';
+import { Badge } from './components/ui/badge';
 import { formatDate, frequencies, missionStatuses, type Frequency, type MissionStatus } from './tasks';
 
 export interface MissionSummary {
@@ -22,13 +24,28 @@ const statusIcons: Record<MissionStatus, string> = {
     expired: '!',
 };
 
-export function MissionStatusBadge({ status }: { status: MissionStatus }) {
+export function MissionStatusBadge({ status, review = false }: { status: MissionStatus; review?: boolean }) {
     return (
-        <span className={`tag mission-status status-${status}`}>
+        <span className={`tag mission-status status-${status}${review && status === 'pending' ? ' review-pending' : ''}`}>
             <span aria-hidden="true">{statusIcons[status]}</span>
-            {status === 'approved' ? 'Concluída · Aprovada' : missionStatuses[status]}
+            {status === 'approved' ? (review ? 'Concluída' : 'Concluída · Aprovada') : missionStatuses[status]}
         </span>
     );
+}
+
+export function MissionBadges({ status, points, review }: { status: MissionStatus; points: number; review?: boolean }) {
+    return <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <MissionStatusBadge status={status} review={review} />
+        <Badge className="ml-auto px-3 py-1.5">{points} {points === 1 ? 'ponto' : 'pontos'}</Badge>
+    </div>;
+}
+
+export function MissionDeadline({ due }: { due: string }) {
+    return <p className="flex items-center gap-2 tabular-nums">
+        <Clock size={17} className="shrink-0" aria-hidden="true" />
+        <span className="sr-only">Prazo</span>
+        {due.replace(' ', ' - ')}
+    </p>;
 }
 
 export function MissionCard({ mission, today }: { mission: MissionSummary; today: string }) {

@@ -18,22 +18,17 @@ final class MissionRepository
             ->when($lock, fn (Builder $query) => $query->lockForUpdate())->firstOrFail();
     }
 
-    public function reviewQueue(User $guardian, ?string $day = null, ?DateTimeInterface $start = null, ?DateTimeInterface $end = null,
-        ?string $child = null, ?string $status = null): Collection
+    public function reviewQueue(User $guardian, string $day, DateTimeInterface $start, DateTimeInterface $end,
+        ?string $child = null, bool $currentDeadlineOnly = false): Collection
     {
         $query = $this->accessible($guardian)
             ->join('users as children', 'children.id', '=', 'task_occurrences.child_id')
             ->where('children.active', true)
             ->when($child !== null, fn (Builder $query) => $query->where('task_occurrences.child_id', $child))
-            ->when($status !== null, fn (Builder $query) => $query->where('task_occurrences.status', $status))
-            ->when($day !== null, fn (Builder $query) => $query
-                ->where(fn (Builder $date) => $date
+            ->where(fn (Builder $date) => $date
                     ->where(fn (Builder $due) => $due->where('due_at', '>=', $start)->where('due_at', '<', $end))
-                    ->when($status === null, fn (Builder $date) => $date->orWhere('due_on', $day))),
-                fn (Builder $query) => $query
-                    ->where(fn (Builder $queue) => $queue->where('status', 'in_review')->orWhere(fn (Builder $expired) => $expired
-                        ->whereIn('status', ['pending', 'adjustment'])->where('due_at', '<=', now()))))
-            ->select('task_occurrences.id', 'task_occurrences.title', 'status', 'due_at', 'children.name as child_name')
+                    ->when(! $currentDeadlineOnly, fn (Builder $date) => $date->orWhere('due_on', $day)))
+            ->select('task_occurrences.id', 'task_occurrences.title', 'task_occurrences.points', 'status', 'due_at', 'children.name as child_name')
             ->addSelect(['last_submitted_at' => DB::table('mission_submissions')
                 ->whereColumn('occurrence_id', 'task_occurrences.id')->latest('submitted_at')->limit(1)->select('submitted_at')]);
 
